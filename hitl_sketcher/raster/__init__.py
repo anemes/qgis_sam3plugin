@@ -1,0 +1,1 @@
+"""Raster capture module."""

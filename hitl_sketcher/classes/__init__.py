@@ -1,0 +1,1 @@
+"""Class management module."""
