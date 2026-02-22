@@ -443,12 +443,22 @@ class ProjectPanel(QDockWidget):
 
     def _refresh_class_list(self):
         """Update the class combo from local class_manager."""
+        prev_id = self._class_combo.currentData()
+
+        self._class_combo.blockSignals(True)
         self._class_combo.clear()
         # Background always first
         self._class_combo.addItem("1: background", 1)
 
         for cls in self.class_manager.classes:
             self._class_combo.addItem(f"{cls.class_id}: {cls.name}", cls.class_id)
+
+        # Restore previous selection
+        if prev_id is not None:
+            idx = self._class_combo.findData(prev_id)
+            if idx >= 0:
+                self._class_combo.setCurrentIndex(idx)
+        self._class_combo.blockSignals(False)
 
         self._class_info.setText(f"{len(self.class_manager.classes)} classes defined")
 
@@ -465,6 +475,12 @@ class ProjectPanel(QDockWidget):
 
     def refresh_regions(self):
         """Refresh region list from backend (with annotation counts)."""
+        # Preserve current selection across rebuild
+        prev_rid = None
+        cur_item = self._region_list.currentItem()
+        if cur_item is not None:
+            prev_rid = cur_item.data(Qt.UserRole)
+
         self._region_list.clear()
         try:
             crs = self.iface.mapCanvas().mapSettings().destinationCrs().authid()
@@ -480,12 +496,21 @@ class ProjectPanel(QDockWidget):
 
         total_ann = len(annotations)
 
-        for r in regions:
+        restore_row = -1
+        for i, r in enumerate(regions):
             rid = r["region_id"]
             count = counts.get(rid, 0)
             item = QListWidgetItem(f"Region {rid}  ({count} annotations)")
             item.setData(Qt.UserRole, rid)
             self._region_list.addItem(item)
+            if rid == prev_rid:
+                restore_row = i
+
+        # Restore previous selection, or select the last region (most recently created)
+        if restore_row >= 0:
+            self._region_list.setCurrentRow(restore_row)
+        elif self._region_list.count() > 0:
+            self._region_list.setCurrentRow(self._region_list.count() - 1)
 
         self._ann_count_label.setText(f"{total_ann} annotations total")
 

@@ -55,7 +55,7 @@ class LabelLayerManager:
         "&field=created_at:string"
     )
     _ANNOTATION_URI = (
-        "Polygon?crs=EPSG:4326"
+        "MultiPolygon?crs=EPSG:4326"
         "&field=annotation_index:integer"
         "&field=class_id:integer"
         "&field=class_name:string"
@@ -116,9 +116,10 @@ class LabelLayerManager:
 
         features = []
         result = []
-        for r in regions:
+        for i, r in enumerate(regions):
             rid = r["region_id"]
-            geom = self._geojson_to_geometry(r["geometry"])
+            geom_dict = r["geometry"]
+            geom = self._geojson_to_geometry(geom_dict)
             if geom is None or geom.isEmpty():
                 logger.warning("Skipping region %d: invalid geometry", rid)
                 continue
@@ -183,10 +184,14 @@ class LabelLayerManager:
 
         features = []
         for idx, ann in enumerate(annotations):
-            geom = self._geojson_to_geometry(ann["geometry"])
+            geom_dict = ann["geometry"]
+            geom = self._geojson_to_geometry(geom_dict)
             if geom is None or geom.isEmpty():
                 logger.warning("Skipping annotation %d: invalid geometry", idx)
                 continue
+            # Promote Polygon → MultiPolygon so all features match layer type
+            if not geom.isMultipart():
+                geom.convertToMultiType()
 
             feat = QgsFeature(fields)
             feat.setGeometry(geom)

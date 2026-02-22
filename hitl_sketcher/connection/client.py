@@ -216,20 +216,41 @@ class BackendClient:
         result = self._get(path)
         return result.get("metrics", [])
 
+    # --- Raster Sources ---
+
+    def register_xyz_source(self, name: str, url_template: str, default_zoom: int = 18) -> dict:
+        """Register an XYZ tile source with the backend."""
+        return self._post("/api/raster/register-xyz", {
+            "name": name,
+            "url_template": url_template,
+            "default_zoom": default_zoom,
+        })
+
+    def list_raster_sources(self) -> List[dict]:
+        """List all registered raster sources."""
+        result = self._get("/api/raster/sources")
+        return result.get("sources", [])
+
     # --- Inference ---
 
     def start_inference(
         self,
-        raster_path: str,
         aoi_bounds: List[float],
         project_id: str = "default",
         checkpoint_run_id: Optional[str] = None,
+        xyz_url: Optional[str] = None,
+        xyz_zoom: int = 18,
+        raster_path: Optional[str] = None,
     ) -> dict:
-        data = {
-            "raster_path": raster_path,
+        data: Dict[str, Any] = {
             "aoi_bounds": aoi_bounds,
             "project_id": project_id,
         }
+        if xyz_url:
+            data["xyz_url"] = xyz_url
+            data["xyz_zoom"] = xyz_zoom
+        elif raster_path:
+            data["raster_path"] = raster_path
         if checkpoint_run_id:
             data["checkpoint_run_id"] = checkpoint_run_id
         return self._post("/api/inference/predict", data)

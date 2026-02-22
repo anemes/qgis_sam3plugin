@@ -18,7 +18,8 @@ from .labeling.polygon_tool import PolygonTool
 from .labeling.project_panel import ProjectPanel
 from .labeling.region_tool import RegionTool
 from .labeling.sam_tool import SAMTool
-from .prediction.inference_tool import InferenceTool
+from .prediction.inference_panel import InferencePanel
+from .prediction.inference_tool import AOIDrawTool
 from .prediction.viewer import PredictionViewer
 
 
@@ -48,7 +49,10 @@ class HITLSketcherPlugin:
         self.region_tool: Optional[RegionTool] = None
         self.polygon_tool: Optional[PolygonTool] = None
         self.sam_tool: Optional[SAMTool] = None
-        self.inference_tool: Optional[InferenceTool] = None
+        self.aoi_tool: Optional[AOIDrawTool] = None
+
+        # Inference panel
+        self.inference_panel: Optional[InferencePanel] = None
 
         # Managers
         self.label_manager: Optional[LabelLayerManager] = None
@@ -120,17 +124,20 @@ class HITLSketcherPlugin:
         # Detect when map tool changes externally (e.g., user clicks pan/zoom)
         self.canvas.mapToolSet.connect(self._on_map_tool_changed)
 
-        # --- Inference tool ---
+        # --- Inference panel + AOI drawing tool ---
         self.prediction_viewer = PredictionViewer(self.iface)
-        self.inference_tool = InferenceTool(
-            self.canvas, self.connection_panel.client, self.prediction_viewer,
-            iface=self.iface,
+        self.inference_panel = InferencePanel(
+            self.iface, self.connection_panel.client, self.prediction_viewer,
         )
-        infer_action = QAction("Run Inference", self.iface.mainWindow())
-        infer_action.setCheckable(True)
-        infer_action.triggered.connect(lambda: self.canvas.setMapTool(self.inference_tool))
-        self.toolbar.addAction(infer_action)
-        self.actions.append(infer_action)
+        self._add_dock_action(
+            "Inference",
+            icon_dir / "settings.svg",
+            self.inference_panel,
+        )
+
+        self.aoi_tool = AOIDrawTool(self.canvas)
+        self.inference_panel.draw_aoi_requested.connect(self._activate_aoi_tool)
+        self.aoi_tool.aoi_drawn.connect(self.inference_panel.set_aoi)
 
     def unload(self) -> None:
         """Cleanup on plugin unload."""
@@ -153,13 +160,13 @@ class HITLSketcherPlugin:
             if hasattr(self.project_panel, '_raster_capture') and self.project_panel._raster_capture:
                 self.project_panel._raster_capture.cleanup()
             self.iface.removeDockWidget(self.project_panel)
-
-        # Clean up inference tool raster captures
-        if self.inference_tool and hasattr(self.inference_tool, '_raster_capture') and self.inference_tool._raster_capture:
-            self.inference_tool._raster_capture.cleanup()
+        if self.inference_panel:
+            if self.inference_panel._poll_timer:
+                self.inference_panel._poll_timer.stop()
+            self.iface.removeDockWidget(self.inference_panel)
 
         # Destroy canvas items from all tools (safe: no more paint events on unload)
-        for tool in (self.polygon_tool, self.region_tool, self.sam_tool, self.inference_tool):
+        for tool in (self.polygon_tool, self.region_tool, self.sam_tool, self.aoi_tool):
             if tool and hasattr(tool, 'destroy'):
                 try:
                     tool.destroy()
@@ -187,6 +194,9 @@ class HITLSketcherPlugin:
                 self.project_panel.refresh_projects()
                 self.project_panel.refresh_classes()
             self._sync_all()
+            if self.inference_panel:
+                self.inference_panel._refresh_sources()
+                self.inference_panel._refresh_models()
             self.iface.messageBar().pushMessage(
                 "HITL Sketcher",
                 "Connected. Loaded project data from backend.",
@@ -206,6 +216,10 @@ class HITLSketcherPlugin:
     def _activate_sam_tool(self) -> None:
         """Activate the SAM3 interactive labeling tool."""
         self.canvas.setMapTool(self.sam_tool)
+
+    def _activate_aoi_tool(self) -> None:
+        """Activate the AOI drawing tool for inference."""
+        self.canvas.setMapTool(self.aoi_tool)
 
     def _on_sam_session_started(self, image_path: str) -> None:
         """Update SAM tool with image extent info when a session starts."""
@@ -243,7 +257,8 @@ class HITLSketcherPlugin:
                 for c in self.project_panel.class_manager.classes
             }
         if self.label_manager:
-            self.label_manager.sync_all(
+            self.label_manager.sync_regions()
+            self.label_manager.sync_annotations(
                 class_colors=class_colors, class_names=class_names
             )
         if self.project_panel:
@@ -255,3 +270,5 @@ class HITLSketcherPlugin:
             self.polygon_tool, self.sam_tool, self.region_tool
         ):
             self.project_panel.deactivate_tool_buttons()
+        if self.inference_panel and new_tool is not self.aoi_tool:
+            self.inference_panel._draw_aoi_btn.setChecked(False)
