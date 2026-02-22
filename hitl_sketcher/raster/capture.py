@@ -8,6 +8,7 @@ current view resolution.
 from __future__ import annotations
 
 import os
+import shutil
 import tempfile
 from pathlib import Path
 from typing import Optional
@@ -24,11 +25,15 @@ from qgis.core import (
 class RasterCapture:
     """Captures the visible raster extent as a GeoTIFF file."""
 
+    # Keep at most this many capture directories before cleaning old ones
+    MAX_CAPTURE_DIRS = 5
+
     def __init__(self, iface, output_dir: Optional[str] = None):
         self.iface = iface
         self.output_dir = output_dir or tempfile.mkdtemp(prefix="hitl_capture_")
         Path(self.output_dir).mkdir(parents=True, exist_ok=True)
         self._capture_count = 0
+        self._old_dirs: list = []
 
     def capture_current_extent(
         self,
@@ -111,6 +116,28 @@ class RasterCapture:
             return None
 
         return output_path
+
+    def reset(self) -> None:
+        """Start a new capture directory, retiring the old one.
+
+        Old directories beyond MAX_CAPTURE_DIRS are deleted.
+        """
+        self._old_dirs.append(self.output_dir)
+        self.output_dir = tempfile.mkdtemp(prefix="hitl_capture_")
+        self._capture_count = 0
+
+        # Prune oldest directories
+        while len(self._old_dirs) > self.MAX_CAPTURE_DIRS:
+            old = self._old_dirs.pop(0)
+            shutil.rmtree(old, ignore_errors=True)
+
+    def cleanup(self) -> None:
+        """Delete all capture directories (call on plugin unload)."""
+        for d in self._old_dirs:
+            shutil.rmtree(d, ignore_errors=True)
+        self._old_dirs.clear()
+        if os.path.isdir(self.output_dir):
+            shutil.rmtree(self.output_dir, ignore_errors=True)
 
     def _find_visible_raster(self) -> Optional[QgsRasterLayer]:
         """Find the first visible raster layer in the project."""

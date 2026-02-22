@@ -234,6 +234,61 @@ class BackendClient:
             data["checkpoint_run_id"] = checkpoint_run_id
         return self._post("/api/inference/predict", data)
 
+    def start_inference_upload(
+        self,
+        image_path: str,
+        aoi_bounds: List[float],
+        project_id: str = "default",
+        checkpoint_run_id: Optional[str] = None,
+    ) -> dict:
+        """Upload a captured GeoTIFF and start inference on it.
+
+        Sends the file plus form fields as multipart/form-data.
+        """
+        import mimetypes
+        boundary = "----HITLBoundary"
+        filename = Path(image_path).name
+        content_type = mimetypes.guess_type(image_path)[0] or "application/octet-stream"
+
+        with open(image_path, "rb") as f:
+            file_data = f.read()
+
+        # Build multipart body: file + form fields
+        parts = []
+        # File part
+        parts.append(
+            f"--{boundary}\r\n"
+            f'Content-Disposition: form-data; name="file"; filename="{filename}"\r\n'
+            f"Content-Type: {content_type}\r\n\r\n"
+        )
+        # Form field parts
+        fields = {
+            "aoi_bounds": json.dumps(aoi_bounds),
+            "project_id": project_id,
+        }
+        if checkpoint_run_id:
+            fields["checkpoint_run_id"] = checkpoint_run_id
+
+        field_parts = b""
+        for name, value in fields.items():
+            field_parts += (
+                f"\r\n--{boundary}\r\n"
+                f'Content-Disposition: form-data; name="{name}"\r\n\r\n'
+                f"{value}"
+            ).encode()
+
+        body = parts[0].encode() + file_data + field_parts + f"\r\n--{boundary}--\r\n".encode()
+
+        url = f"{self.base_url}/api/inference/predict-upload"
+        req = urllib.request.Request(
+            url,
+            data=body,
+            headers={"Content-Type": f"multipart/form-data; boundary={boundary}"},
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=300) as resp:
+            return json.loads(resp.read().decode())
+
     def get_inference_status(self) -> dict:
         return self._get("/api/inference/status")
 

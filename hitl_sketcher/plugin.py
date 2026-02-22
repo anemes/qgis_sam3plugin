@@ -123,7 +123,8 @@ class HITLSketcherPlugin:
         # --- Inference tool ---
         self.prediction_viewer = PredictionViewer(self.iface)
         self.inference_tool = InferenceTool(
-            self.canvas, self.connection_panel.client, self.prediction_viewer
+            self.canvas, self.connection_panel.client, self.prediction_viewer,
+            iface=self.iface,
         )
         infer_action = QAction("Run Inference", self.iface.mainWindow())
         infer_action.setCheckable(True)
@@ -133,6 +134,12 @@ class HITLSketcherPlugin:
 
     def unload(self) -> None:
         """Cleanup on plugin unload."""
+        # Disconnect signals to prevent handler accumulation on reload
+        try:
+            self.canvas.mapToolSet.disconnect(self._on_map_tool_changed)
+        except Exception:
+            pass
+
         for action in self.actions:
             self.iface.removeToolBarIcon(action)
 
@@ -142,7 +149,22 @@ class HITLSketcherPlugin:
         if self.connection_panel:
             self.iface.removeDockWidget(self.connection_panel)
         if self.project_panel:
+            # Clean up raster capture temp files
+            if hasattr(self.project_panel, '_raster_capture') and self.project_panel._raster_capture:
+                self.project_panel._raster_capture.cleanup()
             self.iface.removeDockWidget(self.project_panel)
+
+        # Clean up inference tool raster captures
+        if self.inference_tool and hasattr(self.inference_tool, '_raster_capture') and self.inference_tool._raster_capture:
+            self.inference_tool._raster_capture.cleanup()
+
+        # Destroy canvas items from all tools (safe: no more paint events on unload)
+        for tool in (self.polygon_tool, self.region_tool, self.sam_tool, self.inference_tool):
+            if tool and hasattr(tool, 'destroy'):
+                try:
+                    tool.destroy()
+                except RuntimeError:
+                    pass  # C++ object already deleted
 
         if self.label_manager:
             self.label_manager.remove_layers()
@@ -209,8 +231,21 @@ class HITLSketcherPlugin:
         Called after any data mutation (region created, annotation saved,
         mask accepted, region deleted, etc.).
         """
+        class_colors = None
+        class_names = None
+        if self.project_panel:
+            class_colors = {
+                c.class_id: c.color
+                for c in self.project_panel.class_manager.classes
+            }
+            class_names = {
+                c.class_id: c.name
+                for c in self.project_panel.class_manager.classes
+            }
         if self.label_manager:
-            self.label_manager.sync_all()
+            self.label_manager.sync_all(
+                class_colors=class_colors, class_names=class_names
+            )
         if self.project_panel:
             self.project_panel.refresh_regions()
 

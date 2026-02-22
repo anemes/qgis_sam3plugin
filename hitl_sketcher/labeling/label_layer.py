@@ -46,56 +46,57 @@ class LabelLayerManager:
     def region_layer(self) -> Optional[QgsVectorLayer]:
         return self._region_layer
 
-    def ensure_layers(self) -> None:
-        """Create the in-memory layers if they don't exist yet."""
+    # --- Layer URI templates ---
+
+    _REGION_URI = (
+        "Polygon?crs=EPSG:4326"
+        "&field=region_id:integer"
+        "&field=annotation_count:integer"
+        "&field=created_at:string"
+    )
+    _ANNOTATION_URI = (
+        "Polygon?crs=EPSG:4326"
+        "&field=annotation_index:integer"
+        "&field=class_id:integer"
+        "&field=class_name:string"
+        "&field=region_id:integer"
+        "&field=source:string"
+        "&field=iteration:integer"
+    )
+
+    def _replace_layer(self, uri: str, name: str, features: list,
+                       style_fn) -> QgsVectorLayer:
+        """Create a fresh memory layer pre-populated with *features*.
+
+        Instead of editing a live layer (delete-all → add-all) while it is
+        part of the QGraphicsScene, we build a brand-new layer off-scene,
+        add it to the project, style it, and only then remove the old one.
+        This avoids the stale-QGraphicsItem race that causes SIGSEGV in
+        QGraphicsView::paintEvent().
+
+        Returns the new layer.
+        """
         project = QgsProject.instance()
 
-        # Check if layers already exist
-        self._region_layer = None
-        self._annotation_layer = None
-        for layer in project.mapLayers().values():
-            if layer.name() == self.REGIONS_LAYER_NAME:
-                self._region_layer = layer
-            elif layer.name() == self.ANNOTATIONS_LAYER_NAME:
-                self._annotation_layer = layer
+        # Build the new layer entirely off-scene
+        new_layer = QgsVectorLayer(uri, name, "memory")
+        if features:
+            new_layer.startEditing()
+            new_layer.addFeatures(features)
+            new_layer.commitChanges()
+        new_layer.updateExtents()
 
-        if self._region_layer is None:
-            self._region_layer = QgsVectorLayer(
-                "Polygon?crs=EPSG:4326"
-                "&field=region_id:integer"
-                "&field=annotation_count:integer"
-                "&field=created_at:string",
-                self.REGIONS_LAYER_NAME,
-                "memory",
-            )
-            project.addMapLayer(self._region_layer)
+        # Add new layer to project (builds fresh scene items)
+        project.addMapLayer(new_layer)
+        style_fn(new_layer)
 
-        # Always apply region styling
-        self._style_region_layer()
-
-        if self._annotation_layer is None:
-            self._annotation_layer = QgsVectorLayer(
-                "Polygon?crs=EPSG:4326"
-                "&field=annotation_index:integer"
-                "&field=class_id:integer"
-                "&field=class_name:string"
-                "&field=region_id:integer"
-                "&field=source:string"
-                "&field=iteration:integer",
-                self.ANNOTATIONS_LAYER_NAME,
-                "memory",
-            )
-            project.addMapLayer(self._annotation_layer)
+        return new_layer
 
     def sync_regions(self) -> list[dict]:
         """Fetch regions from backend and rebuild the QGIS layer.
 
         Returns list of region dicts with annotation counts.
         """
-        self.ensure_layers()
-        if self._region_layer is None:
-            return []
-
         try:
             regions = self.client.get_regions(crs="EPSG:4326")
             annotations = self.client.get_annotations(crs="EPSG:4326")
@@ -109,9 +110,9 @@ class LabelLayerManager:
             rid = ann.get("region_id", 0)
             counts[rid] = counts.get(rid, 0) + 1
 
-        # Rebuild layer — use data provider directly (no edit session)
-        dp = self._region_layer.dataProvider()
-        dp.deleteFeatures(dp.allFeatureIds())
+        # Build features using a temporary layer's fields
+        tmp = QgsVectorLayer(self._REGION_URI, "tmp", "memory")
+        fields = tmp.fields()
 
         features = []
         result = []
@@ -122,7 +123,7 @@ class LabelLayerManager:
                 logger.warning("Skipping region %d: invalid geometry", rid)
                 continue
 
-            feat = QgsFeature(self._region_layer.fields())
+            feat = QgsFeature(fields)
             feat.setGeometry(geom)
             feat.setAttribute("region_id", rid)
             feat.setAttribute("annotation_count", counts.get(rid, 0))
@@ -134,23 +135,31 @@ class LabelLayerManager:
                 "created_at": r.get("created_at", ""),
             })
 
-        if features:
-            dp.addFeatures(features)
-        self._region_layer.updateExtents()
-        self._region_layer.triggerRepaint()
+        # Remove old layer, create fresh one
+        old = self._region_layer
+        self._region_layer = self._replace_layer(
+            self._REGION_URI, self.REGIONS_LAYER_NAME, features,
+            self._style_region_layer,
+        )
+        self._remove_old_layer(old)
         logger.info("Synced %d regions to layer", len(features))
 
         return result
 
-    def sync_annotations(self) -> int:
+    def sync_annotations(
+        self,
+        class_colors: Optional[dict] = None,
+        class_names: Optional[dict] = None,
+    ) -> int:
         """Fetch annotations from backend and rebuild the QGIS layer.
+
+        class_colors / class_names: caller-supplied dicts {class_id: value}
+        that take priority over whatever the backend returns.  Pass the local
+        ClassManager data so annotations are styled correctly even before the
+        user has clicked "Sync Classes".
 
         Returns count of annotations synced.
         """
-        self.ensure_layers()
-        if self._annotation_layer is None:
-            return 0
-
         try:
             annotations = self.client.get_annotations(crs="EPSG:4326")
             classes = self.client.get_classes()
@@ -158,14 +167,19 @@ class LabelLayerManager:
             logger.warning("Failed to sync annotations: %s", e)
             return 0
 
-        # Build class lookup
-        class_names = {c["class_id"]: c["name"] for c in classes}
+        # Build class lookup — local defs take precedence over backend so that
+        # newly-added classes are styled immediately without an explicit sync.
         self._class_colors = {c["class_id"]: c["color"] for c in classes}
-        self._class_names = class_names
+        self._class_names = {c["class_id"]: c["name"] for c in classes}
+        if class_colors:
+            self._class_colors.update(class_colors)
+        if class_names:
+            self._class_names.update(class_names)
+        local_names = self._class_names
 
-        # Rebuild layer — use data provider directly (no edit session)
-        dp = self._annotation_layer.dataProvider()
-        dp.deleteFeatures(dp.allFeatureIds())
+        # Build features using a temporary layer's fields
+        tmp = QgsVectorLayer(self._ANNOTATION_URI, "tmp", "memory")
+        fields = tmp.fields()
 
         features = []
         for idx, ann in enumerate(annotations):
@@ -174,23 +188,23 @@ class LabelLayerManager:
                 logger.warning("Skipping annotation %d: invalid geometry", idx)
                 continue
 
-            feat = QgsFeature(self._annotation_layer.fields())
+            feat = QgsFeature(fields)
             feat.setGeometry(geom)
             feat.setAttribute("annotation_index", idx)
             feat.setAttribute("class_id", ann.get("class_id", 0))
-            feat.setAttribute("class_name", class_names.get(ann.get("class_id", 0), "?"))
+            feat.setAttribute("class_name", local_names.get(ann.get("class_id", 0), "?"))
             feat.setAttribute("region_id", ann.get("region_id", 0))
             feat.setAttribute("source", ann.get("source", ""))
             feat.setAttribute("iteration", ann.get("iteration", 0))
             features.append(feat)
 
-        if features:
-            dp.addFeatures(features)
-        self._annotation_layer.updateExtents()
-
-        # Update annotation styling based on class colors
-        self._style_annotation_layer()
-        self._annotation_layer.triggerRepaint()
+        # Remove old layer, create fresh one
+        old = self._annotation_layer
+        self._annotation_layer = self._replace_layer(
+            self._ANNOTATION_URI, self.ANNOTATIONS_LAYER_NAME, features,
+            self._style_annotation_layer,
+        )
+        self._remove_old_layer(old)
         logger.info(
             "Synced %d annotations to layer (class_colors: %s)",
             len(features), list(self._class_colors.keys()),
@@ -198,10 +212,25 @@ class LabelLayerManager:
 
         return len(features)
 
-    def sync_all(self) -> None:
+    def sync_all(
+        self,
+        class_colors: Optional[dict] = None,
+        class_names: Optional[dict] = None,
+    ) -> None:
         """Sync both layers from the backend."""
         self.sync_regions()
-        self.sync_annotations()
+        self.sync_annotations(class_colors=class_colors, class_names=class_names)
+
+    def _remove_old_layer(self, layer: Optional[QgsVectorLayer]) -> None:
+        """Safely remove an old layer from the project."""
+        if layer is None:
+            return
+        try:
+            project = QgsProject.instance()
+            if layer.id() in project.mapLayers():
+                project.removeMapLayer(layer.id())
+        except RuntimeError:
+            pass  # C++ object already deleted
 
     def remove_layers(self) -> None:
         """Remove layers from the project (safe during QGIS shutdown)."""
@@ -216,9 +245,10 @@ class LabelLayerManager:
         self._region_layer = None
         self._annotation_layer = None
 
-    def _style_region_layer(self) -> None:
+    def _style_region_layer(self, layer: Optional[QgsVectorLayer] = None) -> None:
         """Style regions as orange dashed outlines with transparent fill."""
-        if self._region_layer is None:
+        layer = layer or self._region_layer
+        if layer is None:
             return
         symbol = QgsFillSymbol.createSimple({
             "color": "255,165,0,50",
@@ -226,12 +256,13 @@ class LabelLayerManager:
             "outline_style": "dash",
             "outline_width": "2.0",
         })
-        self._region_layer.renderer().setSymbol(symbol)
-        self._region_layer.triggerRepaint()
+        layer.renderer().setSymbol(symbol)
+        layer.triggerRepaint()
 
-    def _style_annotation_layer(self) -> None:
+    def _style_annotation_layer(self, layer: Optional[QgsVectorLayer] = None) -> None:
         """Style annotations using rule-based renderer with class colors."""
-        if self._annotation_layer is None:
+        layer = layer or self._annotation_layer
+        if layer is None:
             return
 
         # Always set up renderer, even without class colors (use fallback)
@@ -265,17 +296,57 @@ class LabelLayerManager:
         root_rule.appendChild(fallback_rule)
 
         renderer = QgsRuleBasedRenderer(root_rule)
-        self._annotation_layer.setRenderer(renderer)
+        layer.setRenderer(renderer)
 
     @staticmethod
     def _geojson_to_geometry(geom_dict: dict) -> Optional[QgsGeometry]:
         """Convert a GeoJSON geometry dict to QgsGeometry safely.
 
-        Uses OGR (always available in QGIS) for robust GeoJSON parsing,
-        converting through WKT which QgsGeometry handles reliably.
+        Builds QgsGeometry directly from coordinate arrays, bypassing the
+        OGR → WKT → QgsGeometry pipeline entirely.  SAM-derived polygons
+        carry 15-digit coordinate precision after reprojection; OGR's
+        ExportToWkt() uses %.15g formatting which produces WKT strings that
+        overflow QGIS's internal WKT parser (std::vector larger than
+        max_size()).  Constructing from QgsPointXY arrays avoids WKT
+        altogether.
+
+        Coordinates are rounded to 6 decimal places (~10 cm in EPSG:4326).
         """
+        from qgis.core import QgsPointXY
+
+        def _pt(coord, prec=6):
+            return QgsPointXY(round(coord[0], prec), round(coord[1], prec))
+
         try:
+            geom_type = geom_dict.get("type", "")
+            coords = geom_dict.get("coordinates", [])
+
+            if geom_type == "Polygon":
+                rings = [[_pt(c) for c in ring] for ring in coords]
+                return QgsGeometry.fromPolygonXY(rings)
+
+            if geom_type == "MultiPolygon":
+                polygons = [
+                    [[_pt(c) for c in ring] for ring in polygon]
+                    for polygon in coords
+                ]
+                return QgsGeometry.fromMultiPolygonXY(polygons)
+
+            # Fallback for other types (Point, LineString, etc.) — use OGR/WKT
+            # with rounded coordinates as before.
             from osgeo import ogr
+
+            def _round_coords(c, prec=6):
+                if not c:
+                    return c
+                if isinstance(c[0], (int, float)):
+                    return [round(v, prec) for v in c]
+                return [_round_coords(sub, prec) for sub in c]
+
+            if "coordinates" in geom_dict:
+                geom_dict = dict(geom_dict)
+                geom_dict["coordinates"] = _round_coords(geom_dict["coordinates"])
+
             geojson_str = json.dumps(geom_dict)
             ogr_geom = ogr.CreateGeometryFromJson(geojson_str)
             if ogr_geom is None:

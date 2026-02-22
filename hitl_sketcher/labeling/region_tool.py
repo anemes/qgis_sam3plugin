@@ -6,8 +6,10 @@ to the backend as an annotation region and added to the local region layer.
 
 from __future__ import annotations
 
-from qgis.core import QgsGeometry, QgsPointXY, QgsWkbTypes
+from qgis.core import QgsWkbTypes
 from qgis.gui import QgsMapTool, QgsRubberBand
+
+from .utils import points_to_geojson
 from qgis.PyQt.QtCore import Qt, pyqtSignal, QObject
 from qgis.PyQt.QtGui import QColor
 
@@ -78,17 +80,8 @@ class RegionTool(QgsMapTool):
         if len(self._points) < 3:
             return
 
-        # Create geometry
-        geometry = QgsGeometry.fromPolygonXY([self._points + [self._points[0]]])
-
-        # Convert to GeoJSON for backend
         crs = self.canvas().mapSettings().destinationCrs().authid()
-        geojson = {
-            "type": "Polygon",
-            "coordinates": [
-                [[p.x(), p.y()] for p in self._points] + [[self._points[0].x(), self._points[0].y()]]
-            ],
-        }
+        geojson = points_to_geojson(self._points)
 
         try:
             result = self.client.add_region(geojson, crs=crs)
@@ -122,5 +115,17 @@ class RegionTool(QgsMapTool):
     def _cleanup(self) -> None:
         self._reset()
         if self._rubber_band:
-            self.canvas().scene().removeItem(self._rubber_band)
+            self._rubber_band.hide()
+
+    def destroy(self) -> None:
+        """Remove canvas items from the scene.
+
+        Safe to call ONLY during plugin unload when no more paint events
+        will fire.  During normal operation use _cleanup() (hide-only).
+        """
+        scene = self.canvas().scene()
+        if scene is None:
+            return
+        if self._rubber_band:
+            scene.removeItem(self._rubber_band)
             self._rubber_band = None

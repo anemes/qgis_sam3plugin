@@ -291,6 +291,7 @@ class SAMTool(QgsMapTool):
                 self._mask_overlay = MaskOverlay(self.canvas())
 
             self._mask_overlay.set_mask(colored, self._image_extent)
+            self._mask_overlay.show()
 
         except Exception as e:
             logger.warning("Mask overlay failed: %s", e)
@@ -360,29 +361,61 @@ class SAMTool(QgsMapTool):
         self._needs_reset = True
 
     def _clear_prompts(self):
-        """Clear all click points and mask overlay."""
+        """Clear all click points and mask overlay.
+
+        Rubber bands are hidden but NOT removed from the scene — removing
+        a QGraphicsItem while a QGraphicsView::paintEvent() is queued causes
+        SIGSEGV.  Hidden items are kept alive and only destroyed on unload.
+        """
         self._click_points = []
         self._box_start = None
         self._drawing_box = False
 
         if self._mask_overlay:
             self._mask_overlay.clear()
-        # Remove individual point markers
-        scene = self.canvas().scene()
+
         for band in self._fg_bands + self._bg_bands:
-            scene.removeItem(band)
-        self._fg_bands.clear()
-        self._bg_bands.clear()
+            band.hide()
+        self._fg_bands = []
+        self._bg_bands = []
+
         if self._box_band:
             self._box_band.reset()
 
     def _cleanup(self):
-        """Full cleanup on deactivation."""
+        """Full cleanup on deactivation.
+
+        Canvas items are hidden but NOT removed from the scene — removing
+        a QGraphicsItem while a QGraphicsView::paintEvent() is queued causes
+        SIGSEGV.  Hidden items are kept alive and only destroyed on unload.
+        """
+        if self._mask_overlay:
+            self._mask_overlay.hide()
+
+        if self._box_band:
+            self._box_band.hide()
+
         self._clear_prompts()
+
+    def destroy(self):
+        """Remove all canvas items from the scene.
+
+        Safe to call ONLY during plugin unload when no more paint events
+        will fire.  During normal operation use _cleanup() (hide-only).
+        """
         scene = self.canvas().scene()
+        if scene is None:
+            return
+
         if self._mask_overlay:
             scene.removeItem(self._mask_overlay)
             self._mask_overlay = None
+
+        for band in self._fg_bands + self._bg_bands:
+            scene.removeItem(band)
+        self._fg_bands = []
+        self._bg_bands = []
+
         if self._box_band:
             scene.removeItem(self._box_band)
             self._box_band = None

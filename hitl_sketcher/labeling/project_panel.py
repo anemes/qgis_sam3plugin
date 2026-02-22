@@ -28,6 +28,7 @@ from qgis.PyQt.QtWidgets import (
     QListWidgetItem,
     QMessageBox,
     QPushButton,
+    QScrollArea,
     QVBoxLayout,
     QWidget,
 )
@@ -281,7 +282,12 @@ class ProjectPanel(QDockWidget):
 
         layout.addStretch()
         widget.setLayout(layout)
-        self.setWidget(widget)
+
+        scroll = QScrollArea()
+        scroll.setWidget(widget)
+        scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.setWidget(scroll)
 
     # ===================== PROJECT ACTIONS =====================
 
@@ -399,6 +405,9 @@ class ProjectPanel(QDockWidget):
 
             self.client.delete_project(project_id)
             self.refresh_projects()
+            self.refresh_classes()
+            self.refresh_regions()
+            self.layers_changed.emit()
             self.iface.messageBar().pushMessage(
                 "HITL", f"Deleted project '{name}'", level=0, duration=3
             )
@@ -562,6 +571,7 @@ class ProjectPanel(QDockWidget):
                 f"Deleted region {region_id} and {deleted} annotations",
                 level=0, duration=3,
             )
+            self.refresh_regions()
             self.layers_changed.emit()
         except Exception as e:
             self.iface.messageBar().pushMessage(
@@ -695,7 +705,9 @@ class ProjectPanel(QDockWidget):
     def _on_capture(self):
         from ..raster.capture import RasterCapture
 
-        capture = RasterCapture(self.iface)
+        if not hasattr(self, '_raster_capture') or self._raster_capture is None:
+            self._raster_capture = RasterCapture(self.iface)
+        capture = self._raster_capture
         path = capture.capture_current_extent()
         if path is None:
             return
@@ -761,7 +773,6 @@ class ProjectPanel(QDockWidget):
             )
             self.set_mask_available(False)
             self.mask_accepted.emit()
-            self.layers_changed.emit()
         except Exception as e:
             msg = str(e)
             if "outside region" in msg.lower():

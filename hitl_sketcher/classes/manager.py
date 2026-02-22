@@ -83,3 +83,5 @@ class ClassManager:
         self._classes = [SegClassDef(**d) for d in data]
         if self._classes:
             self._next_id = max(c.class_id for c in self._classes) + 1
+        else:
+            self._next_id = 2
