@@ -64,6 +64,7 @@ class ProjectPanel(QDockWidget):
         # Update labeling status when class or region selection changes
         self._class_combo.currentIndexChanged.connect(self._update_labeling_status)
         self._region_list.currentRowChanged.connect(self._update_labeling_status)
+        self._region_list.currentRowChanged.connect(self._update_approve_button)
 
     def _setup_ui(self):
         widget = QWidget()
@@ -166,6 +167,16 @@ class ProjectPanel(QDockWidget):
         self._zoom_region_btn.setToolTip("Zoom map to selected region")
         self._zoom_region_btn.clicked.connect(self._on_zoom_region)
         region_btn_layout.addWidget(self._zoom_region_btn)
+
+        self._approve_region_btn = QPushButton("Approve")
+        self._approve_region_btn.setToolTip(
+            "Approve an in-review region: marks it and its annotations "
+            "as approved for training."
+        )
+        self._approve_region_btn.setStyleSheet("background-color: #4CAF50; color: white;")
+        self._approve_region_btn.setEnabled(False)
+        self._approve_region_btn.clicked.connect(self._on_approve_region)
+        region_btn_layout.addWidget(self._approve_region_btn)
 
         self._delete_region_btn = QPushButton("Delete Region")
         self._delete_region_btn.setToolTip(
@@ -500,8 +511,16 @@ class ProjectPanel(QDockWidget):
         for i, r in enumerate(regions):
             rid = r["region_id"]
             count = counts.get(rid, 0)
-            item = QListWidgetItem(f"Region {rid}  ({count} annotations)")
+            status = r.get("status", "active")
+
+            if status == "in_review":
+                item = QListWidgetItem(f"Region {rid}  ({count} ann.) [IN REVIEW]")
+                item.setForeground(QColor("#FF9800"))
+            else:
+                item = QListWidgetItem(f"Region {rid}  ({count} annotations)")
+
             item.setData(Qt.UserRole, rid)
+            item.setData(Qt.UserRole + 1, status)
             self._region_list.addItem(item)
             if rid == prev_rid:
                 restore_row = i
@@ -511,6 +530,8 @@ class ProjectPanel(QDockWidget):
             self._region_list.setCurrentRow(restore_row)
         elif self._region_list.count() > 0:
             self._region_list.setCurrentRow(self._region_list.count() - 1)
+
+        self._update_approve_button()
 
         self._ann_count_label.setText(f"{total_ann} annotations total")
 
@@ -567,6 +588,52 @@ class ProjectPanel(QDockWidget):
         self.refresh_classes()
         self.refresh_regions()
         self.layers_changed.emit()
+
+    def _update_approve_button(self) -> None:
+        """Enable approve button only for in-review regions."""
+        item = self._region_list.currentItem()
+        if item is not None:
+            status = item.data(Qt.UserRole + 1)
+            self._approve_region_btn.setEnabled(status == "in_review")
+        else:
+            self._approve_region_btn.setEnabled(False)
+
+    def _on_approve_region(self):
+        """Approve the selected in-review region for training."""
+        item = self._region_list.currentItem()
+        if item is None:
+            return
+
+        region_id = item.data(Qt.UserRole)
+        status = item.data(Qt.UserRole + 1)
+        if status != "in_review":
+            return
+
+        reply = QMessageBox.question(
+            self,
+            "Approve Region",
+            f"Approve Region {region_id} and all its annotations?\n"
+            "These annotations will be included in the next training run.",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
+        )
+        if reply != QMessageBox.Yes:
+            return
+
+        try:
+            result = self.client.approve_region(region_id)
+            count = result.get("annotations_approved", 0)
+            self.iface.messageBar().pushMessage(
+                "HITL",
+                f"Approved Region {region_id} ({count} annotations)",
+                level=0, duration=3,
+            )
+            self.refresh_regions()
+            self.layers_changed.emit()
+        except Exception as e:
+            self.iface.messageBar().pushMessage(
+                "HITL", f"Approve failed: {e}", level=2, duration=5
+            )
 
     def _on_delete_region(self):
         item = self._region_list.currentItem()

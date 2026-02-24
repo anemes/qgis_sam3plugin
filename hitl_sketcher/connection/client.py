@@ -231,6 +231,19 @@ class BackendClient:
         result = self._get("/api/raster/sources")
         return result.get("sources", [])
 
+    # --- Review workflow ---
+
+    def promote_inference(self, aoi_geojson: dict, job_id: str) -> dict:
+        """Promote inference results to in-review annotations."""
+        return self._post("/api/labels/promote-inference", {
+            "aoi_geojson": aoi_geojson,
+            "job_id": job_id,
+        })
+
+    def approve_region(self, region_id: int) -> dict:
+        """Approve an in-review region and its annotations for training."""
+        return self._post(f"/api/labels/regions/{region_id}/approve", {})
+
     # --- Inference ---
 
     def start_inference(

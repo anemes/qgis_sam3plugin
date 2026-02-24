@@ -138,6 +138,7 @@ class HITLSketcherPlugin:
         self.aoi_tool = AOIDrawTool(self.canvas)
         self.inference_panel.draw_aoi_requested.connect(self._activate_aoi_tool)
         self.aoi_tool.aoi_drawn.connect(self.inference_panel.set_aoi)
+        self.inference_panel.inference_promoted.connect(self._sync_all)
 
     def unload(self) -> None:
         """Cleanup on plugin unload."""

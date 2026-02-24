@@ -36,6 +36,7 @@ class InferencePanel(QDockWidget):
     draw_aoi_requested = pyqtSignal()
     inference_started = pyqtSignal(str)   # job_id
     inference_complete = pyqtSignal(str)  # job_id
+    inference_promoted = pyqtSignal()     # emitted after promote to review succeeds
 
     def __init__(self, iface, client, viewer):
         super().__init__("Inference", iface.mainWindow())
@@ -164,12 +165,26 @@ class InferencePanel(QDockWidget):
         results_btn_row.addWidget(remove_btn)
         results_layout.addLayout(results_btn_row)
 
+        self._promote_btn = QPushButton("Promote to Review")
+        self._promote_btn.setToolTip(
+            "Promote predictions to in-review annotations.\n"
+            "Creates a region from the AOI and imports predictions\n"
+            "for review before including in training."
+        )
+        self._promote_btn.setStyleSheet("background-color: #2196F3; color: white;")
+        self._promote_btn.setEnabled(False)
+        self._promote_btn.clicked.connect(self._on_promote_inference)
+        results_layout.addWidget(self._promote_btn)
+
         results_box.setLayout(results_layout)
         layout.addWidget(results_box)
 
         layout.addStretch()
         scroll.setWidget(container)
         self.setWidget(scroll)
+
+        # Enable promote button when a result is selected
+        self._results_list.currentRowChanged.connect(self._on_result_selected)
 
     # --- Raster Source ---
 
@@ -309,6 +324,9 @@ class InferencePanel(QDockWidget):
         run_id = self._model_combo.currentData()
         zoom = self._zoom_spin.value()
 
+        # Capture AOI polygon before starting (may be overwritten before job completes)
+        self._pending_aoi = self._aoi_geojson
+
         try:
             result = self.client.start_inference(
                 aoi_bounds=aoi_bounds,
@@ -368,8 +386,10 @@ class InferencePanel(QDockWidget):
         self._completed_jobs.append({
             "job_id": job_id,
             "result_paths": result_paths,
+            "aoi_geojson": getattr(self, "_pending_aoi", None),
         })
         self._results_list.addItem(f"Job: {job_id}")
+        self._results_list.setCurrentRow(self._results_list.count() - 1)
 
         self._run_status.setText(f"Complete: {job_id}")
         self._progress_bar.setValue(100)
@@ -417,3 +437,42 @@ class InferencePanel(QDockWidget):
         self.viewer.remove_vector_prediction(job_info["job_id"])
         self._results_list.takeItem(row)
         self._completed_jobs.pop(row)
+
+    # --- Review workflow ---
+
+    def _on_result_selected(self, row: int) -> None:
+        self._promote_btn.setEnabled(0 <= row < len(self._completed_jobs))
+
+    def _on_promote_inference(self) -> None:
+        """Promote selected inference job results to in-review annotations."""
+        row = self._results_list.currentRow()
+        if row < 0 or row >= len(self._completed_jobs):
+            return
+
+        job_info = self._completed_jobs[row]
+        job_id = job_info["job_id"]
+        aoi_geojson = job_info.get("aoi_geojson")
+
+        if aoi_geojson is None:
+            self.iface.messageBar().pushMessage(
+                "Inference", "No AOI polygon stored for this job.", level=2, duration=5
+            )
+            return
+
+        try:
+            result = self.client.promote_inference(
+                aoi_geojson=aoi_geojson,
+                job_id=job_id,
+            )
+            region_id = result.get("region_id", "?")
+            count = result.get("annotations_created", 0)
+            self.iface.messageBar().pushMessage(
+                "Inference",
+                f"Promoted {count} predictions to Region {region_id} (in review)",
+                level=0, duration=5,
+            )
+            self.inference_promoted.emit()
+        except Exception as e:
+            self.iface.messageBar().pushMessage(
+                "Inference", f"Promote failed: {e}", level=2, duration=5
+            )

@@ -53,6 +53,7 @@ class LabelLayerManager:
         "&field=region_id:integer"
         "&field=annotation_count:integer"
         "&field=created_at:string"
+        "&field=status:string"
     )
     _ANNOTATION_URI = (
         "MultiPolygon?crs=EPSG:4326"
@@ -62,6 +63,7 @@ class LabelLayerManager:
         "&field=region_id:integer"
         "&field=source:string"
         "&field=iteration:integer"
+        "&field=status:string"
     )
 
     def _replace_layer(self, uri: str, name: str, features: list,
@@ -124,16 +126,19 @@ class LabelLayerManager:
                 logger.warning("Skipping region %d: invalid geometry", rid)
                 continue
 
+            status = r.get("status", "active")
             feat = QgsFeature(fields)
             feat.setGeometry(geom)
             feat.setAttribute("region_id", rid)
             feat.setAttribute("annotation_count", counts.get(rid, 0))
             feat.setAttribute("created_at", r.get("created_at", ""))
+            feat.setAttribute("status", status)
             features.append(feat)
             result.append({
                 "region_id": rid,
                 "annotation_count": counts.get(rid, 0),
                 "created_at": r.get("created_at", ""),
+                "status": status,
             })
 
         # Remove old layer, create fresh one
@@ -201,6 +206,7 @@ class LabelLayerManager:
             feat.setAttribute("region_id", ann.get("region_id", 0))
             feat.setAttribute("source", ann.get("source", ""))
             feat.setAttribute("iteration", ann.get("iteration", 0))
+            feat.setAttribute("status", ann.get("status", "approved"))
             features.append(feat)
 
         # Remove old layer, create fresh one
@@ -251,43 +257,87 @@ class LabelLayerManager:
         self._annotation_layer = None
 
     def _style_region_layer(self, layer: Optional[QgsVectorLayer] = None) -> None:
-        """Style regions as orange dashed outlines with transparent fill."""
+        """Style regions: active=solid green, in_review=dashed orange."""
         layer = layer or self._region_layer
         if layer is None:
             return
-        symbol = QgsFillSymbol.createSimple({
+
+        root_rule = QgsRuleBasedRenderer.Rule(None)
+
+        # Active regions: solid green outline
+        active_sym = QgsFillSymbol.createSimple({
+            "color": "0,200,0,40",
+            "outline_color": "0,200,0,200",
+            "outline_style": "solid",
+            "outline_width": "1.5",
+        })
+        active_rule = QgsRuleBasedRenderer.Rule(active_sym)
+        active_rule.setFilterExpression('"status" != \'in_review\'')
+        active_rule.setLabel("Active")
+        root_rule.appendChild(active_rule)
+
+        # In-review regions: dashed orange outline
+        review_sym = QgsFillSymbol.createSimple({
             "color": "255,165,0,50",
             "outline_color": "255,165,0,220",
             "outline_style": "dash",
             "outline_width": "2.0",
         })
-        layer.renderer().setSymbol(symbol)
+        review_rule = QgsRuleBasedRenderer.Rule(review_sym)
+        review_rule.setFilterExpression('"status" = \'in_review\'')
+        review_rule.setLabel("In Review")
+        root_rule.appendChild(review_rule)
+
+        renderer = QgsRuleBasedRenderer(root_rule)
+        layer.setRenderer(renderer)
         layer.triggerRepaint()
 
     def _style_annotation_layer(self, layer: Optional[QgsVectorLayer] = None) -> None:
-        """Style annotations using rule-based renderer with class colors."""
+        """Style annotations using rule-based renderer with class colors.
+
+        Approved annotations get solid fill; in-review annotations get lower
+        opacity and dashed outlines so they are visually distinct.
+        """
         layer = layer or self._annotation_layer
         if layer is None:
             return
 
-        # Always set up renderer, even without class colors (use fallback)
         root_rule = QgsRuleBasedRenderer.Rule(None)
 
         for class_id, hex_color in self._class_colors.items():
             color = QColor(hex_color)
+            label = self._class_names.get(class_id, f"Class {class_id}")
+
+            # Approved: normal solid style
             fill_color = QColor(color)
             fill_color.setAlpha(80)
-
-            symbol = QgsFillSymbol.createSimple({
+            approved_sym = QgsFillSymbol.createSimple({
                 "color": f"{fill_color.red()},{fill_color.green()},{fill_color.blue()},{fill_color.alpha()}",
                 "outline_color": f"{color.red()},{color.green()},{color.blue()},220",
                 "outline_width": "0.8",
             })
+            approved_rule = QgsRuleBasedRenderer.Rule(approved_sym)
+            approved_rule.setFilterExpression(
+                f'"class_id" = {class_id} AND "status" != \'in_review\''
+            )
+            approved_rule.setLabel(label)
+            root_rule.appendChild(approved_rule)
 
-            rule = QgsRuleBasedRenderer.Rule(symbol)
-            rule.setFilterExpression(f'"class_id" = {class_id}')
-            rule.setLabel(self._class_names.get(class_id, f"Class {class_id}"))
-            root_rule.appendChild(rule)
+            # In review: lower alpha + dashed outline
+            review_fill = QColor(color)
+            review_fill.setAlpha(40)
+            review_sym = QgsFillSymbol.createSimple({
+                "color": f"{review_fill.red()},{review_fill.green()},{review_fill.blue()},{review_fill.alpha()}",
+                "outline_color": f"{color.red()},{color.green()},{color.blue()},150",
+                "outline_style": "dash",
+                "outline_width": "1.0",
+            })
+            review_rule = QgsRuleBasedRenderer.Rule(review_sym)
+            review_rule.setFilterExpression(
+                f'"class_id" = {class_id} AND "status" = \'in_review\''
+            )
+            review_rule.setLabel(f"{label} (review)")
+            root_rule.appendChild(review_rule)
 
         # Fallback for unknown classes — bright magenta so it's always visible
         fallback_sym = QgsFillSymbol.createSimple({
