@@ -443,6 +443,22 @@ class InferencePanel(QDockWidget):
     def _on_result_selected(self, row: int) -> None:
         self._promote_btn.setEnabled(0 <= row < len(self._completed_jobs))
 
+    @staticmethod
+    def _reproject_geojson(geojson: dict, src_crs, dst_crs_id: str) -> dict:
+        """Reproject a GeoJSON Polygon geometry between CRS."""
+        from qgis.core import QgsPointXY
+        dst_crs = QgsCoordinateReferenceSystem(dst_crs_id)
+        xform = QgsCoordinateTransform(src_crs, dst_crs, QgsProject.instance())
+        coords = geojson["coordinates"]
+        new_coords = []
+        for ring in coords:
+            new_ring = []
+            for pt in ring:
+                transformed = xform.transform(QgsPointXY(pt[0], pt[1]))
+                new_ring.append([transformed.x(), transformed.y()])
+            new_coords.append(new_ring)
+        return {"type": "Polygon", "coordinates": new_coords}
+
     def _on_promote_inference(self) -> None:
         """Promote selected inference job results to in-review annotations."""
         row = self._results_list.currentRow()
@@ -458,6 +474,11 @@ class InferencePanel(QDockWidget):
                 "Inference", "No AOI polygon stored for this job.", level=2, duration=5
             )
             return
+
+        # Reproject AOI from canvas CRS to EPSG:4326 for storage
+        canvas_crs = self.iface.mapCanvas().mapSettings().destinationCrs()
+        if canvas_crs.authid() != "EPSG:4326":
+            aoi_geojson = self._reproject_geojson(aoi_geojson, canvas_crs, "EPSG:4326")
 
         try:
             result = self.client.promote_inference(
