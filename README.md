@@ -80,4 +80,4 @@ hitl_sketcher/
 
 This plugin is licensed under the **GNU General Public License v2.0 or later** (GPL-2.0+). See [LICENSE](LICENSE) for the full text.
 
-The HITL segmentation backend (separate repo) is licensed under CC BY-NC-4.0.
+This should be paired with a backend - demo of one is here: https://github.com/anemes/backend_samdino
