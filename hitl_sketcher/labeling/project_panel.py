@@ -14,6 +14,8 @@ from __future__ import annotations
 import logging
 from typing import Optional
 
+from .. import PLUGIN_NAME
+
 from qgis.PyQt.QtCore import Qt, pyqtSignal
 from qgis.PyQt.QtGui import QColor
 from qgis.PyQt.QtWidgets import (
@@ -52,7 +54,7 @@ class ProjectPanel(QDockWidget):
     sam_tool_requested = pyqtSignal()  # user clicked "SAM3 Click/Box"
 
     def __init__(self, iface, client):
-        super().__init__("HITL Project", iface.mainWindow())
+        super().__init__(f"{PLUGIN_NAME} Project", iface.mainWindow())
         self.iface = iface
         self.client = client
         self.class_manager = ClassManager()
@@ -352,7 +354,7 @@ class ProjectPanel(QDockWidget):
             self.layers_changed.emit()
         except Exception as e:
             self.iface.messageBar().pushMessage(
-                "HITL", f"Switch failed: {e}", level=2, duration=5
+                PLUGIN_NAME, f"Switch failed: {e}", level=2, duration=5
             )
 
     def _on_create_project(self):
@@ -375,11 +377,11 @@ class ProjectPanel(QDockWidget):
             if idx >= 0:
                 self._project_combo.setCurrentIndex(idx)
             self.iface.messageBar().pushMessage(
-                "HITL", f"Created project '{name.strip()}'", level=0, duration=3
+                PLUGIN_NAME, f"Created project '{name.strip()}'", level=0, duration=3
             )
         except Exception as e:
             self.iface.messageBar().pushMessage(
-                "HITL", f"Create failed: {e}", level=2, duration=5
+                PLUGIN_NAME, f"Create failed: {e}", level=2, duration=5
             )
 
     def _on_delete_project(self):
@@ -409,7 +411,7 @@ class ProjectPanel(QDockWidget):
                 other = [p for p in projects if p["project_id"] != project_id]
                 if not other:
                     self.iface.messageBar().pushMessage(
-                        "HITL", "Cannot delete the only project.", level=1, duration=5
+                        PLUGIN_NAME, "Cannot delete the only project.", level=1, duration=5
                     )
                     return
                 self.client.switch_project(other[0]["project_id"])
@@ -420,11 +422,11 @@ class ProjectPanel(QDockWidget):
             self.refresh_regions()
             self.layers_changed.emit()
             self.iface.messageBar().pushMessage(
-                "HITL", f"Deleted project '{name}'", level=0, duration=3
+                PLUGIN_NAME, f"Deleted project '{name}'", level=0, duration=3
             )
         except Exception as e:
             self.iface.messageBar().pushMessage(
-                "HITL", f"Delete failed: {e}", level=2, duration=5
+                PLUGIN_NAME, f"Delete failed: {e}", level=2, duration=5
             )
 
     # ===================== CLASS ACTIONS =====================
@@ -624,7 +626,7 @@ class ProjectPanel(QDockWidget):
             result = self.client.approve_region(region_id)
             count = result.get("annotations_approved", 0)
             self.iface.messageBar().pushMessage(
-                "HITL",
+                PLUGIN_NAME,
                 f"Approved Region {region_id} ({count} annotations)",
                 level=0, duration=3,
             )
@@ -632,14 +634,14 @@ class ProjectPanel(QDockWidget):
             self.layers_changed.emit()
         except Exception as e:
             self.iface.messageBar().pushMessage(
-                "HITL", f"Approve failed: {e}", level=2, duration=5
+                PLUGIN_NAME, f"Approve failed: {e}", level=2, duration=5
             )
 
     def _on_delete_region(self):
         item = self._region_list.currentItem()
         if item is None:
             self.iface.messageBar().pushMessage(
-                "HITL", "Select a region first", level=1, duration=3
+                PLUGIN_NAME, "Select a region first", level=1, duration=3
             )
             return
 
@@ -659,7 +661,7 @@ class ProjectPanel(QDockWidget):
             result = self.client.delete_region(region_id)
             deleted = result.get("annotations_deleted", 0)
             self.iface.messageBar().pushMessage(
-                "HITL",
+                PLUGIN_NAME,
                 f"Deleted region {region_id} and {deleted} annotations",
                 level=0, duration=3,
             )
@@ -667,7 +669,7 @@ class ProjectPanel(QDockWidget):
             self.layers_changed.emit()
         except Exception as e:
             self.iface.messageBar().pushMessage(
-                "HITL", f"Delete failed: {e}", level=2, duration=5
+                PLUGIN_NAME, f"Delete failed: {e}", level=2, duration=5
             )
 
     def _on_zoom_region(self):
@@ -729,7 +731,7 @@ class ProjectPanel(QDockWidget):
 
         if ann_layer is None:
             self.iface.messageBar().pushMessage(
-                "HITL", "No annotation layer found. Click Refresh first.",
+                PLUGIN_NAME, "No annotation layer found. Click Refresh first.",
                 level=1, duration=3,
             )
             return
@@ -737,7 +739,7 @@ class ProjectPanel(QDockWidget):
         selected = ann_layer.selectedFeatures()
         if not selected:
             self.iface.messageBar().pushMessage(
-                "HITL",
+                PLUGIN_NAME,
                 "Select an annotation on the map first (use the selection tool)",
                 level=1, duration=3,
             )
@@ -748,12 +750,12 @@ class ProjectPanel(QDockWidget):
             try:
                 self.client.delete_annotation(ann_idx)
                 self.iface.messageBar().pushMessage(
-                    "HITL", f"Deleted annotation {ann_idx}",
+                    PLUGIN_NAME, f"Deleted annotation {ann_idx}",
                     level=0, duration=2,
                 )
             except Exception as e:
                 self.iface.messageBar().pushMessage(
-                    "HITL", f"Delete failed: {e}", level=2, duration=5
+                    PLUGIN_NAME, f"Delete failed: {e}", level=2, duration=5
                 )
 
         self.layers_changed.emit()
@@ -762,7 +764,7 @@ class ProjectPanel(QDockWidget):
         item = self._region_list.currentItem()
         if item is None:
             self.iface.messageBar().pushMessage(
-                "HITL", "Select a region first", level=1, duration=3
+                PLUGIN_NAME, "Select a region first", level=1, duration=3
             )
             return
 
@@ -782,14 +784,14 @@ class ProjectPanel(QDockWidget):
             result = self.client.delete_region_annotations(region_id)
             deleted = result.get("deleted", 0)
             self.iface.messageBar().pushMessage(
-                "HITL",
+                PLUGIN_NAME,
                 f"Deleted {deleted} annotations from region {region_id}",
                 level=0, duration=3,
             )
             self.layers_changed.emit()
         except Exception as e:
             self.iface.messageBar().pushMessage(
-                "HITL", f"Delete failed: {e}", level=2, duration=5
+                PLUGIN_NAME, f"Delete failed: {e}", level=2, duration=5
             )
 
     # ===================== SAM3 CONTROLS =====================
@@ -821,7 +823,7 @@ class ProjectPanel(QDockWidget):
             self._on_sam_tool()
         except Exception as e:
             self.iface.messageBar().pushMessage(
-                "HITL", f"SAM3 failed: {e}", level=2, duration=5
+                PLUGIN_NAME, f"SAM3 failed: {e}", level=2, duration=5
             )
             self.set_session_active(False)
         finally:
@@ -845,7 +847,7 @@ class ProjectPanel(QDockWidget):
 
         if region_id is None:
             self.iface.messageBar().pushMessage(
-                "HITL",
+                PLUGIN_NAME,
                 "No region selected. Create a region first, then select it.",
                 level=2, duration=5,
             )
@@ -859,7 +861,7 @@ class ProjectPanel(QDockWidget):
             )
             class_name = self._class_combo.currentText()
             self.iface.messageBar().pushMessage(
-                "HITL",
+                PLUGIN_NAME,
                 f"Annotation saved: {class_name} in Region {region_id}",
                 level=0, duration=2,
             )
@@ -869,14 +871,14 @@ class ProjectPanel(QDockWidget):
             msg = str(e)
             if "outside region" in msg.lower():
                 self.iface.messageBar().pushMessage(
-                    "HITL",
+                    PLUGIN_NAME,
                     f"Mask rejected: centroid is outside Region {region_id}. "
                     "Select the correct region or click inside the region boundary.",
                     level=2, duration=5,
                 )
             else:
                 self.iface.messageBar().pushMessage(
-                    "HITL", f"Save failed: {e}", level=2, duration=5
+                    PLUGIN_NAME, f"Save failed: {e}", level=2, duration=5
                 )
 
     def _on_reject(self):

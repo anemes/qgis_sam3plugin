@@ -12,6 +12,7 @@ from qgis.PyQt.QtWidgets import QAction, QToolBar
 from qgis.core import QgsProject
 from qgis.gui import QgisInterface
 
+from . import PLUGIN_NAME
 from .connection.panel import ConnectionPanel
 from .labeling.label_layer import LabelLayerManager
 from .labeling.polygon_tool import PolygonTool
@@ -60,7 +61,7 @@ class HITLSketcherPlugin:
 
     def initGui(self) -> None:
         """Initialize the plugin GUI: toolbar, dock widgets, map tools."""
-        self.toolbar = self.iface.addToolBar("HITL Sketcher")
+        self.toolbar = self.iface.addToolBar(PLUGIN_NAME)
         self.toolbar.setObjectName("HITLSketcherToolbar")
 
         icon_dir = Path(__file__).parent / "icons"
@@ -199,7 +200,7 @@ class HITLSketcherPlugin:
                 self.inference_panel._refresh_sources()
                 self.inference_panel._refresh_models()
             self.iface.messageBar().pushMessage(
-                "HITL Sketcher",
+                PLUGIN_NAME,
                 "Connected. Loaded project data from backend.",
                 level=0, duration=3,
             )

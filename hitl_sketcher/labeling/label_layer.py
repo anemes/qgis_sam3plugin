@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import json
 import logging
+
+from .. import PLUGIN_NAME
 from typing import Optional
 
 from qgis.core import (
@@ -27,8 +29,8 @@ logger = logging.getLogger(__name__)
 class LabelLayerManager:
     """Manages in-memory QGIS layers synced from the backend."""
 
-    ANNOTATIONS_LAYER_NAME = "HITL Annotations"
-    REGIONS_LAYER_NAME = "HITL Regions"
+    ANNOTATIONS_LAYER_NAME = f"{PLUGIN_NAME} Annotations"
+    REGIONS_LAYER_NAME = f"{PLUGIN_NAME} Regions"
 
     def __init__(self, iface, client):
         self.iface = iface
@@ -266,8 +268,8 @@ class LabelLayerManager:
 
         # Active regions: solid green outline
         active_sym = QgsFillSymbol.createSimple({
-            "color": "0,200,0,40",
-            "outline_color": "0,200,0,200",
+            "color": "0,200,0,15",
+            "outline_color": "0,200,0,180",
             "outline_style": "solid",
             "outline_width": "1.5",
         })
@@ -278,8 +280,8 @@ class LabelLayerManager:
 
         # In-review regions: dashed orange outline
         review_sym = QgsFillSymbol.createSimple({
-            "color": "255,165,0,50",
-            "outline_color": "255,165,0,220",
+            "color": "255,165,0,20",
+            "outline_color": "255,165,0,180",
             "outline_style": "dash",
             "outline_width": "2.0",
         })

@@ -13,6 +13,7 @@ from qgis.PyQt.QtWidgets import (
     QWidget,
 )
 
+from .. import PLUGIN_NAME
 from .client import BackendClient
 
 
@@ -22,7 +23,7 @@ class ConnectionPanel(QDockWidget):
     connected = pyqtSignal()  # emitted after successful health check
 
     def __init__(self, iface, parent=None):
-        super().__init__("HITL Connection", parent)
+        super().__init__(f"{PLUGIN_NAME} Connection", parent)
         self.iface = iface
         self.client = BackendClient()
 
@@ -40,6 +41,7 @@ class ConnectionPanel(QDockWidget):
         layout.addWidget(self.connect_btn)
 
         self.status_label = QLabel("Not connected")
+        self.status_label.setWordWrap(True)
         layout.addWidget(self.status_label)
 
         self.gpu_label = QLabel("")

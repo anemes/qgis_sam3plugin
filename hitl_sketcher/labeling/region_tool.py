@@ -9,6 +9,7 @@ from __future__ import annotations
 from qgis.core import QgsWkbTypes
 from qgis.gui import QgsMapTool, QgsRubberBand
 
+from .. import PLUGIN_NAME
 from .utils import points_to_geojson
 from qgis.PyQt.QtCore import Qt, pyqtSignal, QObject
 from qgis.PyQt.QtGui import QColor
@@ -90,7 +91,7 @@ class RegionTool(QgsMapTool):
             # Show message
             from qgis.utils import iface
             iface.messageBar().pushMessage(
-                "HITL Sketcher",
+                PLUGIN_NAME,
                 f"Annotation region {region_id} created",
                 level=0,
                 duration=3,
@@ -99,7 +100,7 @@ class RegionTool(QgsMapTool):
         except Exception as e:
             from qgis.utils import iface
             iface.messageBar().pushMessage(
-                "HITL Sketcher",
+                PLUGIN_NAME,
                 f"Failed to create region: {e}",
                 level=2,
                 duration=5,

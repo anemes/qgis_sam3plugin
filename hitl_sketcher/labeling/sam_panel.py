@@ -14,6 +14,7 @@ import tempfile
 from pathlib import Path
 from typing import Optional
 
+from .. import PLUGIN_NAME
 from qgis.PyQt.QtCore import Qt, pyqtSignal
 from qgis.PyQt.QtWidgets import (
     QComboBox,
@@ -192,7 +193,7 @@ class SAMPanel(QDockWidget):
             self.session_started.emit(path)
         except Exception as e:
             self.iface.messageBar().pushMessage(
-                "HITL Sketcher", f"SAM3 failed: {e}", level=2, duration=5
+                PLUGIN_NAME, f"SAM3 failed: {e}", level=2, duration=5
             )
             self.set_session_active(False)
         finally:
@@ -222,13 +223,13 @@ class SAMPanel(QDockWidget):
                 crs=crs,
             )
             self.iface.messageBar().pushMessage(
-                "HITL Sketcher", "Annotation saved (SAM3)", level=0, duration=2
+                PLUGIN_NAME, "Annotation saved (SAM3)", level=0, duration=2
             )
             self.set_mask_available(False)
             self.mask_accepted.emit()
         except Exception as e:
             self.iface.messageBar().pushMessage(
-                "HITL Sketcher", f"Save failed: {e}", level=2, duration=5
+                PLUGIN_NAME, f"Save failed: {e}", level=2, duration=5
             )
 
     def _on_reject(self):

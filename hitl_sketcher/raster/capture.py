@@ -13,6 +13,7 @@ import tempfile
 from pathlib import Path
 from typing import Optional
 
+from .. import PLUGIN_NAME
 from qgis.core import (
     QgsProject,
     QgsRasterFileWriter,
@@ -59,7 +60,7 @@ class RasterCapture:
             raster_layer = self._find_visible_raster()
         if raster_layer is None:
             self.iface.messageBar().pushMessage(
-                "HITL Sketcher",
+                PLUGIN_NAME,
                 "No visible raster layer found",
                 level=2,
                 duration=5,
@@ -86,7 +87,7 @@ class RasterCapture:
         provider = raster_layer.dataProvider()
         if not pipe.set(provider.clone()):
             self.iface.messageBar().pushMessage(
-                "HITL Sketcher",
+                PLUGIN_NAME,
                 "Failed to create raster pipe",
                 level=2,
                 duration=5,
@@ -108,7 +109,7 @@ class RasterCapture:
 
         if error != QgsRasterFileWriter.NoError:
             self.iface.messageBar().pushMessage(
-                "HITL Sketcher",
+                PLUGIN_NAME,
                 f"Raster export failed (error {error})",
                 level=2,
                 duration=5,

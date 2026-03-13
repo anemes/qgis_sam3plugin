@@ -10,6 +10,7 @@ from __future__ import annotations
 from qgis.core import QgsWkbTypes
 from qgis.gui import QgsMapTool, QgsRubberBand
 
+from .. import PLUGIN_NAME
 from .utils import points_to_geojson
 from qgis.PyQt.QtCore import Qt, pyqtSignal, QObject
 from qgis.PyQt.QtGui import QColor
@@ -100,7 +101,7 @@ class PolygonTool(QgsMapTool):
         if region_id is None:
             from qgis.utils import iface
             iface.messageBar().pushMessage(
-                "HITL Sketcher",
+                PLUGIN_NAME,
                 "No region selected. Create a region first, then select it in the panel.",
                 level=2,
                 duration=5,
@@ -118,7 +119,7 @@ class PolygonTool(QgsMapTool):
             )
             from qgis.utils import iface
             iface.messageBar().pushMessage(
-                "HITL Sketcher",
+                PLUGIN_NAME,
                 f"Annotation saved (class {class_id}, region {region_id})",
                 level=0,
                 duration=3,
@@ -129,7 +130,7 @@ class PolygonTool(QgsMapTool):
             msg = str(e)
             if "outside region" in msg.lower():
                 iface.messageBar().pushMessage(
-                    "HITL Sketcher",
+                    PLUGIN_NAME,
                     f"Polygon rejected: centroid is outside Region {region_id}. "
                     "Draw inside the region or select the correct region.",
                     level=2,
@@ -137,7 +138,7 @@ class PolygonTool(QgsMapTool):
                 )
             else:
                 iface.messageBar().pushMessage(
-                    "HITL Sketcher",
+                    PLUGIN_NAME,
                     f"Failed to save annotation: {e}",
                     level=2,
                     duration=5,

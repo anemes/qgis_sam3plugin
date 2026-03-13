@@ -12,6 +12,8 @@ from __future__ import annotations
 import logging
 from typing import Optional
 
+from .. import PLUGIN_NAME
+
 from qgis.PyQt.QtCore import Qt, pyqtSignal
 from qgis.PyQt.QtWidgets import (
     QComboBox,
@@ -42,7 +44,7 @@ class LabelingPanel(QDockWidget):
     add_region_requested = pyqtSignal()  # user clicked "Add Region"
 
     def __init__(self, iface, client, class_panel=None):
-        super().__init__("HITL Labeling", iface.mainWindow())
+        super().__init__(f"{PLUGIN_NAME} Labeling", iface.mainWindow())
         self.iface = iface
         self.client = client
         self.class_panel = class_panel
@@ -281,7 +283,7 @@ class LabelingPanel(QDockWidget):
         item = self._region_list.currentItem()
         if item is None:
             self.iface.messageBar().pushMessage(
-                "HITL Sketcher", "Select a region first", level=1, duration=3
+                PLUGIN_NAME, "Select a region first", level=1, duration=3
             )
             return
 
@@ -301,7 +303,7 @@ class LabelingPanel(QDockWidget):
             result = self.client.delete_region(region_id)
             deleted = result.get("annotations_deleted", 0)
             self.iface.messageBar().pushMessage(
-                "HITL Sketcher",
+                PLUGIN_NAME,
                 f"Deleted region {region_id} and {deleted} annotations",
                 level=0,
                 duration=3,
@@ -310,7 +312,7 @@ class LabelingPanel(QDockWidget):
             self.layers_changed.emit()
         except Exception as e:
             self.iface.messageBar().pushMessage(
-                "HITL Sketcher", f"Delete failed: {e}", level=2, duration=5
+                PLUGIN_NAME, f"Delete failed: {e}", level=2, duration=5
             )
 
     def _on_zoom_region(self):
@@ -355,7 +357,7 @@ class LabelingPanel(QDockWidget):
 
         if ann_layer is None:
             self.iface.messageBar().pushMessage(
-                "HITL Sketcher", "No annotation layer found. Click Refresh first.",
+                PLUGIN_NAME, "No annotation layer found. Click Refresh first.",
                 level=1, duration=3,
             )
             return
@@ -363,7 +365,7 @@ class LabelingPanel(QDockWidget):
         selected = ann_layer.selectedFeatures()
         if not selected:
             self.iface.messageBar().pushMessage(
-                "HITL Sketcher",
+                PLUGIN_NAME,
                 "Select an annotation on the map first (use the selection tool)",
                 level=1, duration=3,
             )
@@ -374,13 +376,13 @@ class LabelingPanel(QDockWidget):
             try:
                 self.client.delete_annotation(ann_idx)
                 self.iface.messageBar().pushMessage(
-                    "HITL Sketcher",
+                    PLUGIN_NAME,
                     f"Deleted annotation {ann_idx}",
                     level=0, duration=2,
                 )
             except Exception as e:
                 self.iface.messageBar().pushMessage(
-                    "HITL Sketcher", f"Delete failed: {e}", level=2, duration=5
+                    PLUGIN_NAME, f"Delete failed: {e}", level=2, duration=5
                 )
 
         self.refresh_regions()
@@ -391,7 +393,7 @@ class LabelingPanel(QDockWidget):
         item = self._region_list.currentItem()
         if item is None:
             self.iface.messageBar().pushMessage(
-                "HITL Sketcher", "Select a region first", level=1, duration=3
+                PLUGIN_NAME, "Select a region first", level=1, duration=3
             )
             return
 
@@ -411,7 +413,7 @@ class LabelingPanel(QDockWidget):
             result = self.client.delete_region_annotations(region_id)
             deleted = result.get("deleted", 0)
             self.iface.messageBar().pushMessage(
-                "HITL Sketcher",
+                PLUGIN_NAME,
                 f"Deleted {deleted} annotations from region {region_id}",
                 level=0, duration=3,
             )
@@ -419,7 +421,7 @@ class LabelingPanel(QDockWidget):
             self.layers_changed.emit()
         except Exception as e:
             self.iface.messageBar().pushMessage(
-                "HITL Sketcher", f"Delete failed: {e}", level=2, duration=5
+                PLUGIN_NAME, f"Delete failed: {e}", level=2, duration=5
             )
 
     # ===================== SAM3 CONTROLS =====================
@@ -448,7 +450,7 @@ class LabelingPanel(QDockWidget):
             self.session_started.emit(path)
         except Exception as e:
             self.iface.messageBar().pushMessage(
-                "HITL Sketcher", f"SAM3 failed: {e}", level=2, duration=5
+                PLUGIN_NAME, f"SAM3 failed: {e}", level=2, duration=5
             )
             self.set_session_active(False)
         finally:
@@ -477,7 +479,7 @@ class LabelingPanel(QDockWidget):
                 crs=crs,
             )
             self.iface.messageBar().pushMessage(
-                "HITL Sketcher", "Annotation saved (SAM3)", level=0, duration=2
+                PLUGIN_NAME, "Annotation saved (SAM3)", level=0, duration=2
             )
             self.set_mask_available(False)
             self.mask_accepted.emit()
@@ -489,14 +491,14 @@ class LabelingPanel(QDockWidget):
             # Check for outside-region error from backend
             if "outside region" in msg.lower():
                 self.iface.messageBar().pushMessage(
-                    "HITL Sketcher",
+                    PLUGIN_NAME,
                     f"Annotation rejected: outside the selected region. "
                     "Check your region selection.",
                     level=2, duration=5,
                 )
             else:
                 self.iface.messageBar().pushMessage(
-                    "HITL Sketcher", f"Save failed: {e}", level=2, duration=5
+                    PLUGIN_NAME, f"Save failed: {e}", level=2, duration=5
                 )
 
     def _on_reject(self):

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Optional
 
+from .. import PLUGIN_NAME
 from qgis.core import (
     QgsCategorizedSymbolRenderer,
     QgsFillSymbol,
@@ -39,7 +40,7 @@ class PredictionViewer:
         self._remove_old_layers()
 
         # Load class prediction
-        self._class_layer = QgsRasterLayer(class_raster_path, "HITL Prediction")
+        self._class_layer = QgsRasterLayer(class_raster_path, f"{PLUGIN_NAME} Prediction")
         if self._class_layer.isValid():
             self._style_class_layer(self._class_layer)
             project.addMapLayer(self._class_layer)
@@ -47,7 +48,7 @@ class PredictionViewer:
         # Load confidence heatmap
         if confidence_raster_path:
             self._confidence_layer = QgsRasterLayer(
-                confidence_raster_path, "HITL Confidence"
+                confidence_raster_path, f"{PLUGIN_NAME} Confidence"
             )
             if self._confidence_layer.isValid():
                 self._style_confidence_layer(self._confidence_layer)
@@ -60,7 +61,7 @@ class PredictionViewer:
         project = QgsProject.instance()
         to_remove = []
         for layer_id, layer in project.mapLayers().items():
-            if layer.name() in ("HITL Prediction", "HITL Confidence"):
+            if layer.name() in (f"{PLUGIN_NAME} Prediction", f"{PLUGIN_NAME} Confidence"):
                 to_remove.append(layer_id)
         for layer_id in to_remove:
             project.removeMapLayer(layer_id)

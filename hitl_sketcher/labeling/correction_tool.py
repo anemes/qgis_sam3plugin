@@ -9,6 +9,7 @@ Phase 4 implementation placeholder. When activated:
 
 from __future__ import annotations
 
+from .. import PLUGIN_NAME
 from qgis.gui import QgsMapTool
 from qgis.PyQt.QtCore import Qt
 
@@ -25,7 +26,7 @@ class CorrectionTool(QgsMapTool):
         self.canvas().setCursor(Qt.CrossCursor)
         from qgis.utils import iface
         iface.messageBar().pushMessage(
-            "HITL Sketcher",
+            PLUGIN_NAME,
             "Correction mode: not yet implemented (Phase 4)",
             level=1,
             duration=5,

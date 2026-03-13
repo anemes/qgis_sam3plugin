@@ -13,6 +13,8 @@ from __future__ import annotations
 
 import base64
 import logging
+
+from .. import PLUGIN_NAME
 from typing import List, Optional, Tuple
 
 from qgis.core import (
@@ -179,7 +181,7 @@ class SAMTool(QgsMapTool):
         if self._image_extent is None or self._image_width == 0:
             from qgis.utils import iface
             iface.messageBar().pushMessage(
-                "HITL Sketcher",
+                PLUGIN_NAME,
                 "No SAM3 image loaded. Click 'Capture & Set Image' in the Project panel first.",
                 level=1, duration=5,
             )
@@ -189,7 +191,7 @@ class SAMTool(QgsMapTool):
         if pixel is None:
             from qgis.utils import iface
             iface.messageBar().pushMessage(
-                "HITL Sketcher",
+                PLUGIN_NAME,
                 "Click is outside the captured image extent. Capture a new region first.",
                 level=1, duration=3,
             )
@@ -221,7 +223,7 @@ class SAMTool(QgsMapTool):
         except Exception as e:
             from qgis.utils import iface
             iface.messageBar().pushMessage(
-                "HITL Sketcher", f"SAM3 prompt failed: {e}", level=2, duration=5,
+                PLUGIN_NAME, f"SAM3 prompt failed: {e}", level=2, duration=5,
             )
 
     # --- Box mode ---
@@ -246,7 +248,7 @@ class SAMTool(QgsMapTool):
         except Exception as e:
             from qgis.utils import iface
             iface.messageBar().pushMessage(
-                "HITL Sketcher", f"SAM3 box prompt failed: {e}", level=2, duration=5,
+                PLUGIN_NAME, f"SAM3 box prompt failed: {e}", level=2, duration=5,
             )
 
     # --- Mask display ---

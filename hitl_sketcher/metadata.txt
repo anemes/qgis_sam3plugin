@@ -1,14 +1,14 @@
 [general]
-name=HITL Sketcher
+name=EasySegment
 qgisMinimumVersion=3.28
-description=Human-in-the-loop segmentation labeling with SAM3 and DINOv3+UperNet
+description=Human-in-the-loop segmentation with easy labeling courtesy of SAM3 and great models with satellite DINOv3 backbone
 version=0.1.0
-author=HITL Segmentation Project
-email=hitl@example.com
-about=Interactive labeling plugin for geospatial segmentation. Uses SAM3 for mask generation, DINOv3-sat + UperNet for model training, and supports HITL correction loops.
+author=Andras Nemes
+email=contact@nemes.com.au
+about=Interactive labeling plugin for geospatial segmentation. Uses SAM3 for mask generation, DINOv3-sat + UperNet for model training, and supports HITL correction loops. Separate training and inference backend can be hosted remotely and availabile at https://github.com/anemes/backend_samdino
 tracker=https://github.com/example/hitl-sketcher/issues
 repository=https://github.com/example/hitl-sketcher
-tags=segmentation,labeling,machine learning,remote sensing,SAM
+tags=segmentation,labeling,machine learning,remote sensing,SAM,SAM3,DINO,HiTL
 homepage=https://github.com/example/hitl-sketcher
 category=Raster
 icon=icons/settings.svg
