@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from qgis.PyQt.QtCore import QTimer, pyqtSignal
 from qgis.PyQt.QtWidgets import (
+    QApplication,
     QDockWidget,
     QFormLayout,
     QLabel,
@@ -48,6 +49,7 @@ class ConnectionPanel(QDockWidget):
         layout.addWidget(self.gpu_label)
 
         layout.addStretch()
+        container.setPalette(QApplication.palette())
         self.setWidget(container)
 
     def _on_connect(self) -> None:

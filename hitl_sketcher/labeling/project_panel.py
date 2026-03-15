@@ -19,6 +19,7 @@ from .. import PLUGIN_NAME
 from qgis.PyQt.QtCore import Qt, pyqtSignal
 from qgis.PyQt.QtGui import QColor
 from qgis.PyQt.QtWidgets import (
+    QApplication,
     QComboBox,
     QDockWidget,
     QGroupBox,
@@ -88,7 +89,7 @@ class ProjectPanel(QDockWidget):
 
         self._delete_project_btn = QPushButton("Delete")
         self._delete_project_btn.clicked.connect(self._on_delete_project)
-        self._delete_project_btn.setStyleSheet("color: #d32f2f;")
+        self._delete_project_btn.setStyleSheet("color: #d32f2f; background-color: transparent;")
         proj_btn_layout.addWidget(self._delete_project_btn)
 
         proj_layout.addLayout(proj_btn_layout)
@@ -185,7 +186,7 @@ class ProjectPanel(QDockWidget):
             "Delete selected region and ALL its annotations"
         )
         self._delete_region_btn.clicked.connect(self._on_delete_region)
-        self._delete_region_btn.setStyleSheet("color: #d32f2f;")
+        self._delete_region_btn.setStyleSheet("color: #d32f2f; background-color: transparent;")
         region_btn_layout.addWidget(self._delete_region_btn)
 
         region_layout.addLayout(region_btn_layout)
@@ -198,7 +199,7 @@ class ProjectPanel(QDockWidget):
 
         # Active class + region status line
         self._labeling_status = QLabel("Select a class and region to start labeling")
-        self._labeling_status.setStyleSheet("color: #666; font-style: italic;")
+        self._labeling_status.setStyleSheet("color: palette(mid); font-style: italic;")
         ann_layout.addWidget(self._labeling_status)
 
         # Tool activation buttons
@@ -231,7 +232,7 @@ class ProjectPanel(QDockWidget):
             "Click an annotation on the map, then press this to delete it"
         )
         self._delete_ann_btn.clicked.connect(self._on_delete_annotation)
-        self._delete_ann_btn.setStyleSheet("color: #d32f2f;")
+        self._delete_ann_btn.setStyleSheet("color: #d32f2f; background-color: transparent;")
         ann_btn_layout.addWidget(self._delete_ann_btn)
 
         self._clear_region_ann_btn = QPushButton("Clear Region")
@@ -239,7 +240,7 @@ class ProjectPanel(QDockWidget):
             "Delete all annotations in the selected region (keeps region)"
         )
         self._clear_region_ann_btn.clicked.connect(self._on_clear_region_annotations)
-        self._clear_region_ann_btn.setStyleSheet("color: #d32f2f;")
+        self._clear_region_ann_btn.setStyleSheet("color: #d32f2f; background-color: transparent;")
         ann_btn_layout.addWidget(self._clear_region_ann_btn)
 
         ann_layout.addLayout(ann_btn_layout)
@@ -295,6 +296,7 @@ class ProjectPanel(QDockWidget):
 
         layout.addStretch()
         widget.setLayout(layout)
+        widget.setPalette(QApplication.palette())
 
         scroll = QScrollArea()
         scroll.setWidget(widget)
@@ -564,7 +566,7 @@ class ProjectPanel(QDockWidget):
         region_text = f"Region {region_id}" if region_id is not None else "no region"
         self._labeling_status.setText(f"Class: {class_text} | {region_text}")
         self._labeling_status.setStyleSheet(
-            "color: #333; font-weight: bold;" if region_id is not None else "color: #d32f2f; font-style: italic;"
+            "color: palette(window-text); font-weight: bold;" if region_id is not None else "color: #d32f2f; font-style: italic;"
         )
 
     def set_mask_available(self, available: bool, score: float = 0.0):

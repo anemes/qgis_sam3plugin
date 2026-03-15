@@ -10,6 +10,7 @@ from typing import Optional
 from qgis.core import QgsCoordinateReferenceSystem, QgsCoordinateTransform, QgsProject
 from qgis.PyQt.QtCore import Qt, QTimer, pyqtSignal
 from qgis.PyQt.QtWidgets import (
+    QApplication,
     QDockWidget,
     QGroupBox,
     QHBoxLayout,
@@ -122,7 +123,7 @@ class InferencePanel(QDockWidget):
         aoi_layout.addWidget(self._aoi_status)
 
         aoi_note = QLabel("Note: inference runs on the AOI bounding box.")
-        aoi_note.setStyleSheet("color: gray; font-size: 10px;")
+        aoi_note.setStyleSheet("color: palette(mid); font-size: 10px;")
         aoi_note.setWordWrap(True)
         aoi_layout.addWidget(aoi_note)
 
@@ -159,7 +160,7 @@ class InferencePanel(QDockWidget):
         load_btn = QPushButton("Load Results")
         load_btn.clicked.connect(self._on_load_result)
         remove_btn = QPushButton("Remove Layer")
-        remove_btn.setStyleSheet("color: red;")
+        remove_btn.setStyleSheet("color: #d32f2f; background-color: transparent;")
         remove_btn.clicked.connect(self._on_remove_result)
         results_btn_row.addWidget(load_btn)
         results_btn_row.addWidget(remove_btn)
@@ -180,6 +181,7 @@ class InferencePanel(QDockWidget):
         layout.addWidget(results_box)
 
         layout.addStretch()
+        container.setPalette(QApplication.palette())
         scroll.setWidget(container)
         self.setWidget(scroll)
 
