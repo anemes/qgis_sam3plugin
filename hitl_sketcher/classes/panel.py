@@ -5,7 +5,6 @@ from __future__ import annotations
 from qgis.PyQt.QtCore import Qt, pyqtSignal
 from qgis.PyQt.QtGui import QColor
 from qgis.PyQt.QtWidgets import (
-    QColorDialog,
     QDockWidget,
     QHBoxLayout,
     QLabel,

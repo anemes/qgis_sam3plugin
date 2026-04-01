@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import logging
+import urllib.parse
 import urllib.request
 import urllib.error
 from pathlib import Path
@@ -24,10 +25,18 @@ class BackendClient:
     """
 
     def __init__(self, base_url: str = "http://localhost:8000"):
+        self._validate_scheme(base_url)
         self.base_url = base_url.rstrip("/")
 
     def set_url(self, url: str) -> None:
+        self._validate_scheme(url)
         self.base_url = url.rstrip("/")
+
+    @staticmethod
+    def _validate_scheme(url: str) -> None:
+        parsed = urllib.parse.urlparse(url)
+        if parsed.scheme not in ("http", "https"):
+            raise ValueError(f"Only http/https URLs are supported, got: {parsed.scheme!r}")
 
     # --- Low-level ---
 

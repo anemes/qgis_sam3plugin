@@ -163,6 +163,7 @@ class PredictionViewer:
                 QgsProject.instance().removeMapLayer(layer_id)
             except RuntimeError:
                 pass
+            self.iface.mapCanvas().refresh()
 
     def _style_vector_layer(self, layer: QgsVectorLayer) -> None:
         """Apply categorized styling by class_id field."""

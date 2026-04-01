@@ -6,10 +6,7 @@ from pathlib import Path
 from typing import Optional
 
 from qgis.PyQt.QtCore import Qt
-from qgis.PyQt.QtGui import QIcon
 from qgis.PyQt.QtWidgets import QAction, QToolBar
-
-from qgis.core import QgsProject
 from qgis.gui import QgisInterface
 
 from . import PLUGIN_NAME
@@ -186,6 +183,7 @@ class HITLSketcherPlugin:
         action = QAction(title, self.iface.mainWindow())
         action.setCheckable(True)
         action.triggered.connect(lambda checked: widget.setVisible(checked))
+        widget.visibilityChanged.connect(action.setChecked)
         self.toolbar.addAction(action)
         self.actions.append(action)
 

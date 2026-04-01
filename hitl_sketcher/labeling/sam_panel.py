@@ -9,13 +9,8 @@ Provides controls for SAM3 interactive segmentation:
 
 from __future__ import annotations
 
-import base64
-import tempfile
-from pathlib import Path
-from typing import Optional
-
 from .. import PLUGIN_NAME
-from qgis.PyQt.QtCore import Qt, pyqtSignal
+from qgis.PyQt.QtCore import pyqtSignal
 from qgis.PyQt.QtWidgets import (
     QComboBox,
     QDockWidget,
@@ -217,7 +212,7 @@ class SAMPanel(QDockWidget):
         crs = self.iface.mapCanvas().mapSettings().destinationCrs().authid()
 
         try:
-            result = self.client.sam_accept(
+            self.client.sam_accept(
                 class_id=self.get_active_class_id(),
                 region_id=self.get_active_region_id(),
                 crs=crs,

@@ -460,8 +460,6 @@ class ProjectPanel(QDockWidget):
 
         self._class_combo.blockSignals(True)
         self._class_combo.clear()
-        # Background always first
-        self._class_combo.addItem("1: background", 1)
 
         for cls in self.class_manager.classes:
             self._class_combo.addItem(f"{cls.class_id}: {cls.name}", cls.class_id)
@@ -854,7 +852,7 @@ class ProjectPanel(QDockWidget):
             return
 
         try:
-            result = self.client.sam_accept(
+            self.client.sam_accept(
                 class_id=class_id,
                 region_id=region_id,
                 crs="EPSG:4326",

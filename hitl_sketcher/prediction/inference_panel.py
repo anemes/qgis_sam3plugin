@@ -8,7 +8,7 @@ import tempfile
 from typing import Optional
 
 from qgis.core import QgsCoordinateReferenceSystem, QgsCoordinateTransform, QgsProject
-from qgis.PyQt.QtCore import Qt, QTimer, pyqtSignal
+from qgis.PyQt.QtCore import QTimer, pyqtSignal
 from qgis.PyQt.QtWidgets import (
     QDockWidget,
     QGroupBox,
@@ -17,7 +17,6 @@ from qgis.PyQt.QtWidgets import (
     QLabel,
     QLineEdit,
     QListWidget,
-    QListWidgetItem,
     QProgressBar,
     QPushButton,
     QScrollArea,
@@ -249,7 +248,9 @@ class InferencePanel(QDockWidget):
         prev_run_id = self._model_combo.currentData()
         self._model_combo.clear()
         try:
-            models = self.client.list_models()
+            result = self.client._get("/api/models/list")
+            models = result.get("checkpoints", [])
+            production_run = result.get("production_run_id")
             # Dedupe by run_id — keep best mIoU per run
             best_per_run: dict[str, dict] = {}
             for m in models:
@@ -260,7 +261,8 @@ class InferencePanel(QDockWidget):
 
             for rid, m in sorted(best_per_run.items()):
                 miou = m.get("best_val_mIoU", 0.0)
-                self._model_combo.addItem(f"{rid} (mIoU: {miou:.3f})", rid)
+                star = " *" if rid == production_run else ""
+                self._model_combo.addItem(f"{rid} (mIoU: {miou:.3f}){star}", rid)
 
             count = self._model_combo.count()
             self._model_info.setText(

@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import List
-
 
 def points_to_geojson(points) -> dict:
     """Convert a list of QgsPointXY to a closed GeoJSON Polygon geometry."""

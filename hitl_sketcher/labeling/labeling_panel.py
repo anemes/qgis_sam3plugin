@@ -10,7 +10,6 @@ Combines:
 from __future__ import annotations
 
 import logging
-from typing import Optional
 
 from .. import PLUGIN_NAME
 
@@ -473,7 +472,7 @@ class LabelingPanel(QDockWidget):
         crs = self.iface.mapCanvas().mapSettings().destinationCrs().authid()
 
         try:
-            result = self.client.sam_accept(
+            self.client.sam_accept(
                 class_id=self.get_active_class_id(),
                 region_id=self.get_active_region_id(),
                 crs=crs,
@@ -492,7 +491,7 @@ class LabelingPanel(QDockWidget):
             if "outside region" in msg.lower():
                 self.iface.messageBar().pushMessage(
                     PLUGIN_NAME,
-                    f"Annotation rejected: outside the selected region. "
+                    "Annotation rejected: outside the selected region. "
                     "Check your region selection.",
                     level=2, duration=5,
                 )

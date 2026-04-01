@@ -1,16 +1,17 @@
 [general]
 name=EasySegment
-qgisMinimumVersion=3.28
-description=Human-in-the-loop segmentation with easy labeling courtesy of SAM3 and great models with satellite DINOv3 backbone
-version=0.1.0
+qgisMinimumVersion=3.44
+description=Human-in-the-loop segmentation with easy labeling courtesy of SAM3 and trained models with satellite DINOv3 backbone
+version=0.1.1
 author=Andras Nemes
 email=contact@nemes.com.au
 about=Interactive labeling plugin for geospatial segmentation. Uses SAM3 for mask generation, DINOv3-sat + UperNet for model training, and supports HITL correction loops. Separate training and inference backend can be hosted remotely and availabile at https://github.com/anemes/backend_samdino
-tracker=https://github.com/example/hitl-sketcher/issues
-repository=https://github.com/example/hitl-sketcher
+tracker=https://github.com/anemes/qgis_sam3plugin/issues
+repository=https://github.com/anemes/qgis_sam3plugin
 tags=segmentation,labeling,machine learning,remote sensing,SAM,SAM3,DINO,HiTL
-homepage=https://github.com/example/hitl-sketcher
+homepage=https://github.com/anemes/qgis_sam3plugin
 category=Raster
 icon=icons/settings.svg
 experimental=True
 deprecated=False
+changelog=see changelog

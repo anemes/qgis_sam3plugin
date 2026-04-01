@@ -110,7 +110,7 @@ class PolygonTool(QgsMapTool):
             return
 
         try:
-            result = self.client.add_annotation(
+            self.client.add_annotation(
                 geometry_geojson=geojson,
                 class_id=class_id,
                 region_id=region_id,

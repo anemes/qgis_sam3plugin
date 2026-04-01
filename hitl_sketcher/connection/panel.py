@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from qgis.PyQt.QtCore import QTimer, pyqtSignal
+from qgis.PyQt.QtCore import pyqtSignal
 from qgis.PyQt.QtWidgets import (
     QDockWidget,
     QFormLayout,
@@ -47,8 +47,8 @@ class ConnectionPanel(QDockWidget):
         self.gpu_label = QLabel("")
         layout.addWidget(self.gpu_label)
 
-        layout.addStretch()
         self.setWidget(container)
+        self.setMaximumHeight(160)
 
     def _on_connect(self) -> None:
         """Test backend connection."""
