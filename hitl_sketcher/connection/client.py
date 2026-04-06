@@ -27,10 +27,22 @@ class BackendClient:
     def __init__(self, base_url: str = "http://localhost:8000"):
         self._validate_scheme(base_url)
         self.base_url = base_url.rstrip("/")
+        self._api_key: Optional[str] = None
 
     def set_url(self, url: str) -> None:
         self._validate_scheme(url)
         self.base_url = url.rstrip("/")
+
+    def set_api_key(self, key: Optional[str]) -> None:
+        self._api_key = key if key else None
+
+    def _auth_headers(self, extra: Optional[dict] = None) -> dict:
+        h = {}
+        if self._api_key:
+            h["Authorization"] = f"Bearer {self._api_key}"
+        if extra:
+            h.update(extra)
+        return h
 
     @staticmethod
     def _validate_scheme(url: str) -> None:
@@ -43,7 +55,7 @@ class BackendClient:
     def _get(self, path: str) -> dict:
         url = f"{self.base_url}{path}"
         try:
-            req = urllib.request.Request(url)
+            req = urllib.request.Request(url, headers=self._auth_headers())
             with urllib.request.urlopen(req, timeout=30) as resp:
                 return json.loads(resp.read().decode())
         except urllib.error.URLError as e:
@@ -55,7 +67,9 @@ class BackendClient:
         body = json.dumps(data or {}).encode()
         try:
             req = urllib.request.Request(
-                url, data=body, headers={"Content-Type": "application/json"}, method="POST"
+                url, data=body,
+                headers=self._auth_headers({"Content-Type": "application/json"}),
+                method="POST",
             )
             with urllib.request.urlopen(req, timeout=300) as resp:
                 return json.loads(resp.read().decode())
@@ -66,7 +80,7 @@ class BackendClient:
     def _delete(self, path: str) -> dict:
         url = f"{self.base_url}{path}"
         try:
-            req = urllib.request.Request(url, method="DELETE")
+            req = urllib.request.Request(url, headers=self._auth_headers(), method="DELETE")
             with urllib.request.urlopen(req, timeout=30) as resp:
                 return json.loads(resp.read().decode())
         except urllib.error.URLError as e:
@@ -93,7 +107,7 @@ class BackendClient:
         req = urllib.request.Request(
             url,
             data=body,
-            headers={"Content-Type": f"multipart/form-data; boundary={boundary}"},
+            headers=self._auth_headers({"Content-Type": f"multipart/form-data; boundary={boundary}"}),
             method="POST",
         )
         with urllib.request.urlopen(req, timeout=120) as resp:
@@ -102,7 +116,10 @@ class BackendClient:
     def _download_file(self, path: str, output_path: str) -> str:
         """Download a file from the backend."""
         url = f"{self.base_url}{path}"
-        urllib.request.urlretrieve(url, output_path)
+        req = urllib.request.Request(url, headers=self._auth_headers())
+        with urllib.request.urlopen(req, timeout=120) as resp:
+            with open(output_path, "wb") as f:
+                f.write(resp.read())
         return output_path
 
     # --- Health ---
@@ -326,7 +343,7 @@ class BackendClient:
         req = urllib.request.Request(
             url,
             data=body,
-            headers={"Content-Type": f"multipart/form-data; boundary={boundary}"},
+            headers=self._auth_headers({"Content-Type": f"multipart/form-data; boundary={boundary}"}),
             method="POST",
         )
         with urllib.request.urlopen(req, timeout=300) as resp:

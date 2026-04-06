@@ -34,6 +34,10 @@ class ConnectionPanel(QDockWidget):
         form = QFormLayout()
         self.url_input = QLineEdit("http://localhost:8000")
         form.addRow("Backend URL:", self.url_input)
+        self.api_key_input = QLineEdit()
+        self.api_key_input.setPlaceholderText("Leave blank for local dev")
+        self.api_key_input.setEchoMode(QLineEdit.Password)
+        form.addRow("API Key:", self.api_key_input)
         layout.addLayout(form)
 
         self.connect_btn = QPushButton("Connect")
@@ -48,12 +52,14 @@ class ConnectionPanel(QDockWidget):
         layout.addWidget(self.gpu_label)
 
         self.setWidget(container)
-        self.setMaximumHeight(160)
+        self.setMaximumHeight(200)
 
     def _on_connect(self) -> None:
         """Test backend connection."""
         url = self.url_input.text().strip()
+        api_key = self.api_key_input.text().strip()
         self.client.set_url(url)
+        self.client.set_api_key(api_key or None)
         try:
             result = self.client.health_check()
             status = result.get("status", "unknown")
