@@ -393,18 +393,17 @@ class BackendClient:
         class_id: int,
         region_id: int,
         crs: str = "EPSG:4326",
-        simplify_tolerance: float = 1.0,
     ) -> dict:
         """Accept current SAM3 mask and save as annotation.
 
         The backend reads the affine transform from the session's GeoTIFF,
-        so the polygon is automatically geo-referenced.
+        so the polygon is automatically geo-referenced. Simplification is
+        computed adaptively based on the feature's physical size.
         """
         data = {
             "class_id": class_id,
             "region_id": region_id,
             "crs": crs,
-            "simplify_tolerance": simplify_tolerance,
         }
         return self._post("/api/sam/accept", data)
 
