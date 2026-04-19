@@ -354,6 +354,7 @@ class LabelLayerManager:
 
         renderer = QgsRuleBasedRenderer(root_rule)
         layer.setRenderer(renderer)
+        layer.triggerRepaint()
 
     @staticmethod
     def _geojson_to_geometry(geom_dict: dict) -> Optional[QgsGeometry]:
