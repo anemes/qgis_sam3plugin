@@ -9,11 +9,12 @@ from __future__ import annotations
 
 import json
 import logging
+import mimetypes
+import urllib.error
 import urllib.parse
 import urllib.request
-import urllib.error
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -54,16 +55,23 @@ class BackendClient:
 
     def _get(self, path: str) -> dict:
         url = f"{self.base_url}{path}"
+        self._validate_scheme(url)
         try:
             req = urllib.request.Request(url, headers=self._auth_headers())
-            with urllib.request.urlopen(req, timeout=30) as resp:
+            with urllib.request.urlopen(req, timeout=10) as resp:  # noqa: S310
                 return json.loads(resp.read().decode())
+        except urllib.error.HTTPError as e:
+            if e.code == 401:
+                raise PermissionError("Invalid API key") from e
+            logger.error("GET %s failed: HTTP %d", url, e.code)
+            raise ConnectionError(f"Backend error: HTTP {e.code}") from e
         except urllib.error.URLError as e:
             logger.error("GET %s failed: %s", url, e)
             raise ConnectionError(f"Backend unavailable: {e}") from e
 
-    def _post(self, path: str, data: dict = None) -> dict:
+    def _post(self, path: str, data: Optional[dict] = None) -> dict:
         url = f"{self.base_url}{path}"
+        self._validate_scheme(url)
         body = json.dumps(data or {}).encode()
         try:
             req = urllib.request.Request(
@@ -71,7 +79,7 @@ class BackendClient:
                 headers=self._auth_headers({"Content-Type": "application/json"}),
                 method="POST",
             )
-            with urllib.request.urlopen(req, timeout=300) as resp:
+            with urllib.request.urlopen(req, timeout=300) as resp:  # noqa: S310
                 return json.loads(resp.read().decode())
         except urllib.error.URLError as e:
             logger.error("POST %s failed: %s", url, e)
@@ -79,9 +87,10 @@ class BackendClient:
 
     def _delete(self, path: str) -> dict:
         url = f"{self.base_url}{path}"
+        self._validate_scheme(url)
         try:
             req = urllib.request.Request(url, headers=self._auth_headers(), method="DELETE")
-            with urllib.request.urlopen(req, timeout=30) as resp:
+            with urllib.request.urlopen(req, timeout=30) as resp:  # noqa: S310
                 return json.loads(resp.read().decode())
         except urllib.error.URLError as e:
             logger.error("DELETE %s failed: %s", url, e)
@@ -89,7 +98,6 @@ class BackendClient:
 
     def _upload_file(self, path: str, file_path: str, field_name: str = "file") -> dict:
         """Upload a file via multipart form data."""
-        import mimetypes
         boundary = "----HITLBoundary"
         filename = Path(file_path).name
         content_type = mimetypes.guess_type(file_path)[0] or "application/octet-stream"
@@ -104,32 +112,38 @@ class BackendClient:
         ).encode() + file_data + f"\r\n--{boundary}--\r\n".encode()
 
         url = f"{self.base_url}{path}"
+        self._validate_scheme(url)
         req = urllib.request.Request(
             url,
             data=body,
             headers=self._auth_headers({"Content-Type": f"multipart/form-data; boundary={boundary}"}),
             method="POST",
         )
-        with urllib.request.urlopen(req, timeout=120) as resp:
+        with urllib.request.urlopen(req, timeout=120) as resp:  # noqa: S310
             return json.loads(resp.read().decode())
 
     def _download_file(self, path: str, output_path: str) -> str:
         """Download a file from the backend."""
         url = f"{self.base_url}{path}"
+        self._validate_scheme(url)
         req = urllib.request.Request(url, headers=self._auth_headers())
-        with urllib.request.urlopen(req, timeout=120) as resp:
+        with urllib.request.urlopen(req, timeout=120) as resp:  # noqa: S310
             with open(output_path, "wb") as f:
                 f.write(resp.read())
         return output_path
 
-    # --- Health ---
+    # --- Health / Status ---
 
     def health_check(self) -> dict:
         return self._get("/health")
 
+    def connect(self) -> dict:
+        """Authenticated status check — validates API key and returns GPU info."""
+        return self._get("/api/status")
+
     # --- Projects ---
 
-    def list_projects(self) -> List[dict]:
+    def list_projects(self) -> list[dict]:
         result = self._get("/api/projects/list")
         return result.get("projects", [])
 
@@ -151,16 +165,16 @@ class BackendClient:
 
     # --- Classes ---
 
-    def get_classes(self) -> List[dict]:
+    def get_classes(self) -> list[dict]:
         result = self._get("/api/labels/classes")
         return result.get("classes", [])
 
-    def set_classes(self, classes: List[dict]) -> dict:
+    def set_classes(self, classes: list[dict]) -> dict:
         return self._post("/api/labels/classes", {"classes": classes})
 
     # --- Regions ---
 
-    def get_regions(self, crs: str = "EPSG:4326") -> List[dict]:
+    def get_regions(self, crs: str = "EPSG:4326") -> list[dict]:
         result = self._get(f"/api/labels/regions?crs={crs}")
         return result.get("regions", [])
 
@@ -172,7 +186,7 @@ class BackendClient:
 
     # --- Annotations ---
 
-    def get_annotations(self, region_id: Optional[int] = None, crs: str = "EPSG:4326") -> List[dict]:
+    def get_annotations(self, region_id: Optional[int] = None, crs: str = "EPSG:4326") -> list[dict]:
         path = f"/api/labels/annotations?crs={crs}"
         if region_id is not None:
             path += f"&region_id={region_id}"
@@ -237,7 +251,7 @@ class BackendClient:
     def get_training_status(self) -> dict:
         return self._get("/api/training/status")
 
-    def get_training_metrics(self, run_id: Optional[str] = None) -> List[dict]:
+    def get_training_metrics(self, run_id: Optional[str] = None) -> list[dict]:
         path = f"/api/training/metrics/{run_id}" if run_id else "/api/training/metrics"
         result = self._get(path)
         return result.get("metrics", [])
@@ -252,7 +266,7 @@ class BackendClient:
             "default_zoom": default_zoom,
         })
 
-    def list_raster_sources(self) -> List[dict]:
+    def list_raster_sources(self) -> list[dict]:
         """List all registered raster sources."""
         result = self._get("/api/raster/sources")
         return result.get("sources", [])
@@ -274,14 +288,14 @@ class BackendClient:
 
     def start_inference(
         self,
-        aoi_bounds: List[float],
+        aoi_bounds: list[float],
         project_id: str = "default",
         checkpoint_run_id: Optional[str] = None,
         xyz_url: Optional[str] = None,
         xyz_zoom: int = 18,
         raster_path: Optional[str] = None,
     ) -> dict:
-        data: Dict[str, Any] = {
+        data: dict[str, Any] = {
             "aoi_bounds": aoi_bounds,
             "project_id": project_id,
         }
@@ -297,7 +311,7 @@ class BackendClient:
     def start_inference_upload(
         self,
         image_path: str,
-        aoi_bounds: List[float],
+        aoi_bounds: list[float],
         project_id: str = "default",
         checkpoint_run_id: Optional[str] = None,
     ) -> dict:
@@ -305,7 +319,6 @@ class BackendClient:
 
         Sends the file plus form fields as multipart/form-data.
         """
-        import mimetypes
         boundary = "----HITLBoundary"
         filename = Path(image_path).name
         content_type = mimetypes.guess_type(image_path)[0] or "application/octet-stream"
@@ -315,13 +328,11 @@ class BackendClient:
 
         # Build multipart body: file + form fields
         parts = []
-        # File part
         parts.append(
             f"--{boundary}\r\n"
             f'Content-Disposition: form-data; name="file"; filename="{filename}"\r\n'
             f"Content-Type: {content_type}\r\n\r\n"
         )
-        # Form field parts
         fields = {
             "aoi_bounds": json.dumps(aoi_bounds),
             "project_id": project_id,
@@ -340,13 +351,14 @@ class BackendClient:
         body = parts[0].encode() + file_data + field_parts + f"\r\n--{boundary}--\r\n".encode()
 
         url = f"{self.base_url}/api/inference/predict-upload"
+        self._validate_scheme(url)
         req = urllib.request.Request(
             url,
             data=body,
             headers=self._auth_headers({"Content-Type": f"multipart/form-data; boundary={boundary}"}),
             method="POST",
         )
-        with urllib.request.urlopen(req, timeout=300) as resp:
+        with urllib.request.urlopen(req, timeout=300) as resp:  # noqa: S310
             return json.loads(resp.read().decode())
 
     def get_inference_status(self) -> dict:
@@ -357,9 +369,13 @@ class BackendClient:
 
     # --- Models ---
 
-    def list_models(self) -> List[dict]:
+    def list_models(self) -> list[dict]:
         result = self._get("/api/models/list")
         return result.get("checkpoints", [])
+
+    def get_models_response(self) -> dict:
+        """Return the full /api/models/list response including production_run_id."""
+        return self._get("/api/models/list")
 
     def get_best_model(self) -> Optional[dict]:
         result = self._get("/api/models/best")
@@ -373,9 +389,9 @@ class BackendClient:
 
     def sam_prompt(
         self,
-        point_coords: Optional[List[List[float]]] = None,
-        point_labels: Optional[List[int]] = None,
-        box: Optional[List[float]] = None,
+        point_coords: Optional[list[list[float]]] = None,
+        point_labels: Optional[list[int]] = None,
+        box: Optional[list[float]] = None,
         reset_prompts: bool = False,
     ) -> dict:
         """Send point/box prompt to SAM3, get mask back."""

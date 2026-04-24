@@ -2,10 +2,7 @@
 
 from __future__ import annotations
 
-from typing import List
-
-
-def generate_annotation_style(classes: List[dict]) -> str:
+def generate_annotation_style(classes: list[dict]) -> str:
     """Generate QML style XML for annotation layer based on class definitions.
 
     Args:

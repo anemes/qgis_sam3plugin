@@ -7,7 +7,12 @@ import os
 import tempfile
 from typing import Optional
 
-from qgis.core import QgsCoordinateReferenceSystem, QgsCoordinateTransform, QgsProject
+from qgis.core import (
+    QgsCoordinateReferenceSystem,
+    QgsCoordinateTransform,
+    QgsPointXY,
+    QgsProject,
+)
 from qgis.PyQt.QtCore import QTimer, pyqtSignal
 from qgis.PyQt.QtWidgets import (
     QDockWidget,
@@ -248,7 +253,7 @@ class InferencePanel(QDockWidget):
         prev_run_id = self._model_combo.currentData()
         self._model_combo.clear()
         try:
-            result = self.client._get("/api/models/list")
+            result = self.client.get_models_response()
             models = result.get("checkpoints", [])
             production_run = result.get("production_run_id")
             # Dedupe by run_id — keep best mIoU per run
@@ -318,7 +323,6 @@ class InferencePanel(QDockWidget):
         target_crs = QgsCoordinateReferenceSystem("EPSG:3857")
         if canvas_crs.authid() != "EPSG:3857":
             xform = QgsCoordinateTransform(canvas_crs, target_crs, QgsProject.instance())
-            from qgis.core import QgsPointXY
             ll = xform.transform(QgsPointXY(aoi_bounds[0], aoi_bounds[1]))
             ur = xform.transform(QgsPointXY(aoi_bounds[2], aoi_bounds[3]))
             aoi_bounds = [ll.x(), ll.y(), ur.x(), ur.y()]
@@ -448,7 +452,6 @@ class InferencePanel(QDockWidget):
     @staticmethod
     def _reproject_geojson(geojson: dict, src_crs, dst_crs_id: str) -> dict:
         """Reproject a GeoJSON Polygon geometry between CRS."""
-        from qgis.core import QgsPointXY
         dst_crs = QgsCoordinateReferenceSystem(dst_crs_id)
         xform = QgsCoordinateTransform(src_crs, dst_crs, QgsProject.instance())
         coords = geojson["coordinates"]

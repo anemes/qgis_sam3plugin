@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Optional
 
+from osgeo import ogr
+
 from .. import PLUGIN_NAME
 from qgis.core import (
     QgsCategorizedSymbolRenderer,
@@ -136,8 +138,6 @@ class PredictionViewer:
         self, gpkg_path: str, job_id: str
     ) -> Optional[QgsVectorLayer]:
         """Load vectorized predictions from GeoPackage as a categorized layer."""
-        from osgeo import ogr
-
         ds = ogr.Open(gpkg_path)
         if ds is None or ds.GetLayerCount() == 0:
             return None

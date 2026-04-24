@@ -12,6 +12,7 @@ from __future__ import annotations
 from .. import PLUGIN_NAME
 from qgis.gui import QgsMapTool
 from qgis.PyQt.QtCore import Qt
+from qgis.utils import iface as qgis_iface
 
 
 class CorrectionTool(QgsMapTool):
@@ -24,8 +25,7 @@ class CorrectionTool(QgsMapTool):
     def activate(self) -> None:
         super().activate()
         self.canvas().setCursor(Qt.CrossCursor)
-        from qgis.utils import iface
-        iface.messageBar().pushMessage(
+        qgis_iface.messageBar().pushMessage(
             PLUGIN_NAME,
             "Correction mode: not yet implemented (Phase 4)",
             level=1,

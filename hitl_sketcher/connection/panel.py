@@ -61,14 +61,18 @@ class ConnectionPanel(QDockWidget):
         self.client.set_url(url)
         self.client.set_api_key(api_key or None)
         try:
-            result = self.client.health_check()
-            status = result.get("status", "unknown")
+            result = self.client.connect()
             gpu = result.get("gpu_active", "none")
-            vram = result.get("gpu_vram_mb", 0)
-            self.status_label.setText(f"Connected ({status})")
+            vram = result.get("gpu_vram_total_mb", 0)
+            project = result.get("project", "")
+            self.status_label.setText(f"Connected — project: {project}")
             self.status_label.setStyleSheet("color: green")
             self.gpu_label.setText(f"GPU: {gpu} | VRAM: {vram:.0f} MB")
             self.connected.emit()
+        except PermissionError:
+            self.status_label.setText("Invalid API key")
+            self.status_label.setStyleSheet("color: red")
+            self.gpu_label.setText("")
         except Exception as e:
             self.status_label.setText(f"Failed: {e}")
             self.status_label.setStyleSheet("color: red")

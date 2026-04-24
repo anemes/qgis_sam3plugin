@@ -15,7 +15,9 @@ import logging
 from typing import Optional
 
 from .. import PLUGIN_NAME
-
+from ..classes.manager import ClassManager
+from .label_layer import LabelLayerManager
+from qgis.core import QgsProject, QgsRectangle
 from qgis.PyQt.QtCore import Qt, pyqtSignal
 from qgis.PyQt.QtGui import QColor
 from qgis.PyQt.QtWidgets import (
@@ -34,8 +36,6 @@ from qgis.PyQt.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
-
-from ..classes.manager import ClassManager
 
 logger = logging.getLogger(__name__)
 
@@ -153,9 +153,7 @@ class ProjectPanel(QDockWidget):
             "Draw a new exhaustive labeling region on the map. "
             "Left-click to add points, right-click to finish."
         )
-        self._add_region_btn.clicked.connect(
-            lambda: self.add_region_requested.emit()
-        )
+        self._add_region_btn.clicked.connect(self.add_region_requested.emit)
         add_region_layout.addWidget(self._add_region_btn)
 
         self._refresh_btn = QPushButton("Refresh")
@@ -684,7 +682,6 @@ class ProjectPanel(QDockWidget):
                     geom = r["geometry"]
                     coords = geom.get("coordinates", [[]])
                     if coords and coords[0]:
-                        from qgis.core import QgsRectangle
                         xs = [c[0] for c in coords[0]]
                         ys = [c[1] for c in coords[0]]
                         rect = QgsRectangle(min(xs), min(ys), max(xs), max(ys))
@@ -717,9 +714,6 @@ class ProjectPanel(QDockWidget):
     # ===================== ANNOTATION ACTIONS =====================
 
     def _on_delete_annotation(self):
-        from .label_layer import LabelLayerManager
-        from qgis.core import QgsProject
-
         project = QgsProject.instance()
         ann_layer = None
         for layer in project.mapLayers().values():

@@ -6,13 +6,13 @@ to the backend as an annotation region and added to the local region layer.
 
 from __future__ import annotations
 
-from qgis.core import QgsWkbTypes
-from qgis.gui import QgsMapTool, QgsRubberBand
-
 from .. import PLUGIN_NAME
 from .utils import points_to_geojson
+from qgis.core import QgsWkbTypes
+from qgis.gui import QgsMapTool, QgsRubberBand
 from qgis.PyQt.QtCore import Qt, pyqtSignal, QObject
 from qgis.PyQt.QtGui import QColor
+from qgis.utils import iface as qgis_iface
 
 
 class _RegionToolSignals(QObject):
@@ -89,8 +89,7 @@ class RegionTool(QgsMapTool):
             region_id = result.get("region_id", 0)
 
             # Show message
-            from qgis.utils import iface
-            iface.messageBar().pushMessage(
+            qgis_iface.messageBar().pushMessage(
                 PLUGIN_NAME,
                 f"Annotation region {region_id} created",
                 level=0,
@@ -98,8 +97,7 @@ class RegionTool(QgsMapTool):
             )
             self._signals.region_created.emit()
         except Exception as e:
-            from qgis.utils import iface
-            iface.messageBar().pushMessage(
+            qgis_iface.messageBar().pushMessage(
                 PLUGIN_NAME,
                 f"Failed to create region: {e}",
                 level=2,

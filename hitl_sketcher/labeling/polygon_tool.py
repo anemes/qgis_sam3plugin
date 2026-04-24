@@ -7,13 +7,13 @@ currently selected class and region.
 
 from __future__ import annotations
 
-from qgis.core import QgsWkbTypes
-from qgis.gui import QgsMapTool, QgsRubberBand
-
 from .. import PLUGIN_NAME
 from .utils import points_to_geojson
+from qgis.core import QgsWkbTypes
+from qgis.gui import QgsMapTool, QgsRubberBand
 from qgis.PyQt.QtCore import Qt, pyqtSignal, QObject
 from qgis.PyQt.QtGui import QColor
+from qgis.utils import iface as qgis_iface
 
 
 class _PolygonToolSignals(QObject):
@@ -99,8 +99,7 @@ class PolygonTool(QgsMapTool):
         region_id = self._get_region_id()
 
         if region_id is None:
-            from qgis.utils import iface
-            iface.messageBar().pushMessage(
+            qgis_iface.messageBar().pushMessage(
                 PLUGIN_NAME,
                 "No region selected. Create a region first, then select it in the panel.",
                 level=2,
@@ -117,8 +116,7 @@ class PolygonTool(QgsMapTool):
                 crs=crs,
                 source="manual",
             )
-            from qgis.utils import iface
-            iface.messageBar().pushMessage(
+            qgis_iface.messageBar().pushMessage(
                 PLUGIN_NAME,
                 f"Annotation saved (class {class_id}, region {region_id})",
                 level=0,
@@ -126,10 +124,9 @@ class PolygonTool(QgsMapTool):
             )
             self._signals.annotation_saved.emit()
         except Exception as e:
-            from qgis.utils import iface
             msg = str(e)
             if "outside region" in msg.lower():
-                iface.messageBar().pushMessage(
+                qgis_iface.messageBar().pushMessage(
                     PLUGIN_NAME,
                     f"Polygon rejected: centroid is outside Region {region_id}. "
                     "Draw inside the region or select the correct region.",
@@ -137,7 +134,7 @@ class PolygonTool(QgsMapTool):
                     duration=5,
                 )
             else:
-                iface.messageBar().pushMessage(
+                qgis_iface.messageBar().pushMessage(
                     PLUGIN_NAME,
                     f"Failed to save annotation: {e}",
                     level=2,

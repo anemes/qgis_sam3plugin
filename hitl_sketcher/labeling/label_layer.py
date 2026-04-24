@@ -9,17 +9,19 @@ from __future__ import annotations
 
 import json
 import logging
-
-from .. import PLUGIN_NAME
 from typing import Optional
 
+from osgeo import ogr
+
+from .. import PLUGIN_NAME
 from qgis.core import (
     QgsFeature,
     QgsGeometry,
+    QgsPointXY,
     QgsProject,
     QgsVectorLayer,
-    QgsRuleBasedRenderer,
     QgsFillSymbol,
+    QgsRuleBasedRenderer,
 )
 from qgis.PyQt.QtGui import QColor
 
@@ -370,8 +372,6 @@ class LabelLayerManager:
 
         Coordinates are rounded to 6 decimal places (~10 cm in EPSG:4326).
         """
-        from qgis.core import QgsPointXY
-
         def _pt(coord, prec=6):
             return QgsPointXY(round(coord[0], prec), round(coord[1], prec))
 
@@ -392,8 +392,6 @@ class LabelLayerManager:
 
             # Fallback for other types (Point, LineString, etc.) — use OGR/WKT
             # with rounded coordinates as before.
-            from osgeo import ogr
-
             def _round_coords(c, prec=6):
                 if not c:
                     return c

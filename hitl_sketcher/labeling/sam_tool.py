@@ -13,10 +13,9 @@ from __future__ import annotations
 
 import base64
 import logging
+from typing import Optional
 
 from .. import PLUGIN_NAME
-from typing import List, Optional, Tuple
-
 from qgis.core import (
     QgsGeometry,
     QgsPointXY,
@@ -26,6 +25,7 @@ from qgis.core import (
 from qgis.gui import QgsMapCanvasItem, QgsMapTool, QgsRubberBand
 from qgis.PyQt.QtCore import QByteArray, QRectF, Qt
 from qgis.PyQt.QtGui import QColor, QImage, QPainter
+from qgis.utils import iface as qgis_iface
 
 logger = logging.getLogger(__name__)
 
@@ -95,13 +95,13 @@ class SAMTool(QgsMapTool):
 
         # Overlay and rubber bands
         self._mask_overlay: Optional[MaskOverlay] = None
-        self._fg_bands: List[QgsRubberBand] = []  # green foreground markers
-        self._bg_bands: List[QgsRubberBand] = []  # red background markers
+        self._fg_bands: list[QgsRubberBand] = []  # green foreground markers
+        self._bg_bands: list[QgsRubberBand] = []  # red background markers
         self._box_band: Optional[QgsRubberBand] = None  # box drawing
 
         # State
         self._mode = "click"  # "click" or "box"
-        self._click_points: List[Tuple[QgsPointXY, int]] = []  # (point, label)
+        self._click_points: list[tuple[QgsPointXY, int]] = []  # (point, label)
         self._box_start: Optional[QgsPointXY] = None
         self._drawing_box = False
         self._needs_reset = False  # send reset_prompts on next prompt
@@ -179,8 +179,7 @@ class SAMTool(QgsMapTool):
         point = self.toMapCoordinates(event.pos())
 
         if self._image_extent is None or self._image_width == 0:
-            from qgis.utils import iface
-            iface.messageBar().pushMessage(
+            qgis_iface.messageBar().pushMessage(
                 PLUGIN_NAME,
                 "No SAM3 image loaded. Click 'Capture & Set Image' in the Project panel first.",
                 level=1, duration=5,
@@ -189,8 +188,7 @@ class SAMTool(QgsMapTool):
 
         pixel = self._map_to_pixel(point)
         if pixel is None:
-            from qgis.utils import iface
-            iface.messageBar().pushMessage(
+            qgis_iface.messageBar().pushMessage(
                 PLUGIN_NAME,
                 "Click is outside the captured image extent. Capture a new region first.",
                 level=1, duration=3,
@@ -221,8 +219,7 @@ class SAMTool(QgsMapTool):
             )
             self._show_mask(result)
         except Exception as e:
-            from qgis.utils import iface
-            iface.messageBar().pushMessage(
+            qgis_iface.messageBar().pushMessage(
                 PLUGIN_NAME, f"SAM3 prompt failed: {e}", level=2, duration=5,
             )
 
@@ -246,8 +243,7 @@ class SAMTool(QgsMapTool):
             result = self.client.sam_prompt(box=box, reset_prompts=True)
             self._show_mask(result)
         except Exception as e:
-            from qgis.utils import iface
-            iface.messageBar().pushMessage(
+            qgis_iface.messageBar().pushMessage(
                 PLUGIN_NAME, f"SAM3 box prompt failed: {e}", level=2, duration=5,
             )
 

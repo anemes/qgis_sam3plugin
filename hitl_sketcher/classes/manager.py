@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import List, Optional
+from typing import Optional
 
 
 @dataclass
@@ -29,11 +29,11 @@ class ClassManager:
     ]
 
     def __init__(self):
-        self._classes: List[SegClassDef] = []
+        self._classes: list[SegClassDef] = []
         self._next_id = 2
 
     @property
-    def classes(self) -> List[SegClassDef]:
+    def classes(self) -> list[SegClassDef]:
         return list(self._classes)
 
     @property
@@ -74,11 +74,11 @@ class ClassManager:
                 return c
         return None
 
-    def to_dicts(self) -> List[dict]:
+    def to_dicts(self) -> list[dict]:
         """Convert to list of dicts for API sync."""
         return [{"class_id": c.class_id, "name": c.name, "color": c.color} for c in self._classes]
 
-    def from_dicts(self, data: List[dict]) -> None:
+    def from_dicts(self, data: list[dict]) -> None:
         """Load from list of dicts (from API)."""
         self._classes = [SegClassDef(**d) for d in data]
         if self._classes:
