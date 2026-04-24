@@ -1,11 +1,23 @@
 [general]
 name=EasySegment
 qgisMinimumVersion=3.44
-description=Human-in-the-loop segmentation with easy labeling courtesy of SAM3 and trained models with satellite DINOv3 backbone
+description=Interactive HITL labeling and training plugin for geospatial segmentation using SAM3 and DINOv3-sat
 version=0.1.3
 author=Andras Nemes
 email=contact@nemes.com.au
-about=Interactive labeling plugin for geospatial segmentation. Uses SAM3 for mask generation, DINOv3-sat + UperNet for model training, and supports HITL correction loops. Separate training and inference backend can be hosted remotely and availabile at https://github.com/anemes/backend_samdino
+about=EasySegment connects QGIS to a GPU inference backend for human-in-the-loop geospatial segmentation. Use it purely as a labeling tool, or run the full pipeline.
+
+	Workflow: create a project → define classes → draw exhaustive annotation regions → label with SAM3 or polygon tool → train → run batch inference → promote best model → correct and retrain.
+
+	Labeling: SAM3 interactive segmentation via multi-click prompts directly on the QGIS viewport (left-click adds, right-click negates). Polygon draw tool available as an alternative. Labels are stored as polygons.
+
+	Training: DINOv3-sat backbone pretrained on 493M satellite images with a UperNet head. Only the head trains — 50–100 labelled features per class is enough to start.
+
+	Inference: Batch inference over any raster extent. Results load as a styled vector layer with a confidence heatmap for guided correction.
+
+	Raster support: Works with any QGIS layer — GeoTIFF, WMS, XYZ tile URLs. Captures the viewport directly for SAM3 prompts and training chips.
+
+	Backend: Requires a separate FastAPI + GPU server (https://github.com/anemes/backend_samdino). Supports remote hosting with optional API key authentication.
 tracker=https://github.com/anemes/qgis_sam3plugin/issues
 repository=https://github.com/anemes/qgis_sam3plugin
 tags=segmentation,labeling,machine learning,remote sensing,SAM,SAM3,DINO,HiTL

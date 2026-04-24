@@ -58,7 +58,7 @@ class BackendClient:
         self._validate_scheme(url)
         try:
             req = urllib.request.Request(url, headers=self._auth_headers())
-            with urllib.request.urlopen(req, timeout=10) as resp:  # noqa: S310
+            with urllib.request.urlopen(req, timeout=10) as resp:  # nosec: B310  # noqa: S310
                 return json.loads(resp.read().decode())
         except urllib.error.HTTPError as e:
             if e.code == 401:
@@ -79,7 +79,7 @@ class BackendClient:
                 headers=self._auth_headers({"Content-Type": "application/json"}),
                 method="POST",
             )
-            with urllib.request.urlopen(req, timeout=300) as resp:  # noqa: S310
+            with urllib.request.urlopen(req, timeout=300) as resp:  # nosec: B310  # noqa: S310
                 return json.loads(resp.read().decode())
         except urllib.error.URLError as e:
             logger.error("POST %s failed: %s", url, e)
@@ -90,7 +90,7 @@ class BackendClient:
         self._validate_scheme(url)
         try:
             req = urllib.request.Request(url, headers=self._auth_headers(), method="DELETE")
-            with urllib.request.urlopen(req, timeout=30) as resp:  # noqa: S310
+            with urllib.request.urlopen(req, timeout=30) as resp:  # nosec: B310  # noqa: S310
                 return json.loads(resp.read().decode())
         except urllib.error.URLError as e:
             logger.error("DELETE %s failed: %s", url, e)
@@ -119,7 +119,7 @@ class BackendClient:
             headers=self._auth_headers({"Content-Type": f"multipart/form-data; boundary={boundary}"}),
             method="POST",
         )
-        with urllib.request.urlopen(req, timeout=120) as resp:  # noqa: S310
+        with urllib.request.urlopen(req, timeout=120) as resp:  # nosec: B310  # noqa: S310
             return json.loads(resp.read().decode())
 
     def _download_file(self, path: str, output_path: str) -> str:
@@ -127,7 +127,7 @@ class BackendClient:
         url = f"{self.base_url}{path}"
         self._validate_scheme(url)
         req = urllib.request.Request(url, headers=self._auth_headers())
-        with urllib.request.urlopen(req, timeout=120) as resp:  # noqa: S310
+        with urllib.request.urlopen(req, timeout=120) as resp:  # nosec: B310  # noqa: S310
             with open(output_path, "wb") as f:
                 f.write(resp.read())
         return output_path
@@ -358,7 +358,7 @@ class BackendClient:
             headers=self._auth_headers({"Content-Type": f"multipart/form-data; boundary={boundary}"}),
             method="POST",
         )
-        with urllib.request.urlopen(req, timeout=300) as resp:  # noqa: S310
+        with urllib.request.urlopen(req, timeout=300) as resp:  # nosec: B310  # noqa: S310
             return json.loads(resp.read().decode())
 
     def get_inference_status(self) -> dict:
