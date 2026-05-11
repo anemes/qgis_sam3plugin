@@ -29,6 +29,7 @@ class BackendClient:
         self._validate_scheme(base_url)
         self.base_url = base_url.rstrip("/")
         self._api_key: Optional[str] = None
+        self._status: dict = {}  # cached from last successful connect()
 
     def set_url(self, url: str) -> None:
         self._validate_scheme(url)
@@ -139,7 +140,14 @@ class BackendClient:
 
     def connect(self) -> dict:
         """Authenticated status check — validates API key and returns GPU info."""
-        return self._get("/api/status")
+        result = self._get("/api/status")
+        self._status = result
+        return result
+
+    @property
+    def user_id(self) -> str:
+        """User identity returned by the last successful connect()."""
+        return self._status.get("user_id", "default")
 
     # --- Projects ---
 
@@ -273,12 +281,22 @@ class BackendClient:
 
     # --- Review workflow ---
 
-    def promote_inference(self, aoi_geojson: dict, job_id: str) -> dict:
-        """Promote inference results to in-review annotations."""
-        return self._post("/api/labels/promote-inference", {
-            "aoi_geojson": aoi_geojson,
-            "job_id": job_id,
-        })
+    def promote_inference(
+        self,
+        aoi_geojson: dict,
+        job_id: str,
+        project_id: Optional[str] = None,
+    ) -> dict:
+        """Promote inference results to in-review annotations.
+
+        When *project_id* is given the results are stored in that project's
+        GeoPackage (e.g. '_inference' for standalone use) without switching
+        the active training project.
+        """
+        payload: dict = {"aoi_geojson": aoi_geojson, "job_id": job_id}
+        if project_id is not None:
+            payload["project_id"] = project_id
+        return self._post("/api/labels/promote-inference", payload)
 
     def approve_region(self, region_id: int) -> dict:
         """Approve an in-review region and its annotations for training."""
@@ -291,6 +309,7 @@ class BackendClient:
         aoi_bounds: list[float],
         project_id: str = "default",
         checkpoint_run_id: Optional[str] = None,
+        checkpoint_project_id: Optional[str] = None,
         xyz_url: Optional[str] = None,
         xyz_zoom: int = 18,
         raster_path: Optional[str] = None,
@@ -306,6 +325,8 @@ class BackendClient:
             data["raster_path"] = raster_path
         if checkpoint_run_id:
             data["checkpoint_run_id"] = checkpoint_run_id
+        if checkpoint_project_id:
+            data["checkpoint_project_id"] = checkpoint_project_id
         return self._post("/api/inference/predict", data)
 
     def start_inference_upload(
@@ -314,6 +335,7 @@ class BackendClient:
         aoi_bounds: list[float],
         project_id: str = "default",
         checkpoint_run_id: Optional[str] = None,
+        checkpoint_project_id: Optional[str] = None,
     ) -> dict:
         """Upload a captured GeoTIFF and start inference on it.
 
@@ -339,6 +361,8 @@ class BackendClient:
         }
         if checkpoint_run_id:
             fields["checkpoint_run_id"] = checkpoint_run_id
+        if checkpoint_project_id:
+            fields["checkpoint_project_id"] = checkpoint_project_id
 
         field_parts = b""
         for name, value in fields.items():
@@ -380,6 +404,11 @@ class BackendClient:
     def get_best_model(self) -> Optional[dict]:
         result = self._get("/api/models/best")
         return result.get("checkpoint")
+
+    def get_model_catalogue(self) -> list[dict]:
+        """Return the global model catalogue: all project checkpoints + global models."""
+        result = self._get("/api/models/catalogue")
+        return result.get("catalogue", [])
 
     # --- SAM3 ---
 

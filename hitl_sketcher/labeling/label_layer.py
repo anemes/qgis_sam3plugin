@@ -17,6 +17,7 @@ from .. import PLUGIN_NAME
 from qgis.core import (
     QgsFeature,
     QgsGeometry,
+    QgsLayerTreeGroup,
     QgsPointXY,
     QgsProject,
     QgsVectorLayer,
@@ -33,6 +34,7 @@ class LabelLayerManager:
 
     ANNOTATIONS_LAYER_NAME = f"{PLUGIN_NAME} Annotations"
     REGIONS_LAYER_NAME = f"{PLUGIN_NAME} Regions"
+    ANNOTATIONS_GROUP_NAME = f"{PLUGIN_NAME} Annotations"
 
     def __init__(self, iface, client):
         self.iface = iface
@@ -70,6 +72,15 @@ class LabelLayerManager:
         "&field=status:string"
     )
 
+    @staticmethod
+    def _get_or_create_group(group_name: str) -> QgsLayerTreeGroup:
+        """Return an existing layer tree group or create one at the top."""
+        root = QgsProject.instance().layerTreeRoot()
+        group = root.findGroup(group_name)
+        if group is None:
+            group = root.insertGroup(0, group_name)
+        return group
+
     def _replace_layer(self, uri: str, name: str, features: list,
                        style_fn) -> QgsVectorLayer:
         """Create a fresh memory layer pre-populated with *features*.
@@ -79,6 +90,9 @@ class LabelLayerManager:
         add it to the project, style it, and only then remove the old one.
         This avoids the stale-QGraphicsItem race that causes SIGSEGV in
         QGraphicsView::paintEvent().
+
+        The layer is placed inside the ``ANNOTATIONS_GROUP_NAME`` layer tree
+        group so it is visually separated from standalone inference results.
 
         Returns the new layer.
         """
@@ -92,8 +106,10 @@ class LabelLayerManager:
             new_layer.commitChanges()
         new_layer.updateExtents()
 
-        # Add new layer to project (builds fresh scene items)
-        project.addMapLayer(new_layer)
+        # Add to the annotations group (builds fresh scene items)
+        group = self._get_or_create_group(self.ANNOTATIONS_GROUP_NAME)
+        project.addMapLayer(new_layer, False)  # register without adding to root
+        group.addLayer(new_layer)
         style_fn(new_layer)
 
         return new_layer

@@ -10,6 +10,8 @@ from .. import PLUGIN_NAME
 from qgis.core import (
     QgsCategorizedSymbolRenderer,
     QgsFillSymbol,
+    QgsLayerTree,
+    QgsLayerTreeGroup,
     QgsProject,
     QgsRasterLayer,
     QgsRasterShader,
@@ -134,10 +136,34 @@ class PredictionViewer:
         QColor(128, 0, 255),       # 9
     ]
 
+    @staticmethod
+    def _get_or_create_group(group_name: str) -> QgsLayerTreeGroup:
+        """Return an existing layer tree group or create one at the top."""
+        root = QgsProject.instance().layerTreeRoot()
+        group = root.findGroup(group_name)
+        if group is None:
+            group = root.insertGroup(0, group_name)
+        return group
+
     def load_vector_prediction(
-        self, gpkg_path: str, job_id: str
+        self,
+        gpkg_path: str,
+        job_id: str,
+        display_name: Optional[str] = None,
+        group_name: Optional[str] = None,
     ) -> Optional[QgsVectorLayer]:
-        """Load vectorized predictions from GeoPackage as a categorized layer."""
+        """Load vectorized predictions from GeoPackage as a categorized layer.
+
+        Args:
+            gpkg_path:    Path to the GeoPackage file with prediction polygons.
+            job_id:       Unique job identifier used as a stable key.
+            display_name: Human-readable layer name shown in the layer panel.
+                          Defaults to ``"Inference: {job_id}"``.
+            group_name:   Layer tree group to place the layer in.  When given,
+                          the group is created at the top of the tree if it
+                          doesn't exist yet.  When ``None`` the layer is added
+                          to the root (previous behaviour).
+        """
         ds = ogr.Open(gpkg_path)
         if ds is None or ds.GetLayerCount() == 0:
             return None
@@ -145,13 +171,20 @@ class PredictionViewer:
         ds = None  # close
 
         uri = f"{gpkg_path}|layername={layer_name}"
-        display_name = f"Inference: {job_id}"
-        layer = QgsVectorLayer(uri, display_name, "ogr")
+        name = display_name or f"Inference: {job_id}"
+        layer = QgsVectorLayer(uri, name, "ogr")
         if not layer.isValid():
             return None
 
         self._style_vector_layer(layer)
-        QgsProject.instance().addMapLayer(layer)
+
+        if group_name:
+            group = self._get_or_create_group(group_name)
+            QgsProject.instance().addMapLayer(layer, False)
+            group.addLayer(layer)
+        else:
+            QgsProject.instance().addMapLayer(layer)
+
         self._vector_layers[job_id] = layer.id()
         return layer
 
