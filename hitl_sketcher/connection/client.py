@@ -29,6 +29,7 @@ class BackendClient:
         self._validate_scheme(base_url)
         self.base_url = base_url.rstrip("/")
         self._api_key: Optional[str] = None
+        self._session_token: Optional[str] = None
         self._status: dict = {}  # cached from last successful connect()
 
     def set_url(self, url: str) -> None:
@@ -42,6 +43,8 @@ class BackendClient:
         h = {}
         if self._api_key:
             h["Authorization"] = f"Bearer {self._api_key}"
+        if self._session_token:
+            h["X-Session-Token"] = self._session_token
         if extra:
             h.update(extra)
         return h
@@ -70,6 +73,15 @@ class BackendClient:
             logger.error("GET %s failed: %s", url, e)
             raise ConnectionError(f"Backend unavailable: {e}") from e
 
+    @staticmethod
+    def _read_error_detail(exc: urllib.error.HTTPError) -> str:
+        """Extract the JSON 'detail' field from a FastAPI error response body."""
+        try:
+            body = exc.read().decode(errors="replace")
+            return json.loads(body).get("detail", body) or f"HTTP {exc.code}"
+        except Exception:
+            return f"HTTP {exc.code}: {exc.reason}"
+
     def _post(self, path: str, data: Optional[dict] = None) -> dict:
         url = f"{self.base_url}{path}"
         self._validate_scheme(url)
@@ -82,6 +94,10 @@ class BackendClient:
             )
             with urllib.request.urlopen(req, timeout=300) as resp:  # nosec: B310  # noqa: S310
                 return json.loads(resp.read().decode())
+        except urllib.error.HTTPError as e:
+            detail = self._read_error_detail(e)
+            logger.error("POST %s failed: HTTP %d — %s", url, e.code, detail)
+            raise ConnectionError(detail) from e
         except urllib.error.URLError as e:
             logger.error("POST %s failed: %s", url, e)
             raise ConnectionError(f"Backend unavailable: {e}") from e
@@ -93,6 +109,10 @@ class BackendClient:
             req = urllib.request.Request(url, headers=self._auth_headers(), method="DELETE")
             with urllib.request.urlopen(req, timeout=30) as resp:  # nosec: B310  # noqa: S310
                 return json.loads(resp.read().decode())
+        except urllib.error.HTTPError as e:
+            detail = self._read_error_detail(e)
+            logger.error("DELETE %s failed: HTTP %d — %s", url, e.code, detail)
+            raise ConnectionError(detail) from e
         except urllib.error.URLError as e:
             logger.error("DELETE %s failed: %s", url, e)
             raise ConnectionError(f"Backend unavailable: {e}") from e
@@ -120,8 +140,16 @@ class BackendClient:
             headers=self._auth_headers({"Content-Type": f"multipart/form-data; boundary={boundary}"}),
             method="POST",
         )
-        with urllib.request.urlopen(req, timeout=120) as resp:  # nosec: B310  # noqa: S310
-            return json.loads(resp.read().decode())
+        try:
+            with urllib.request.urlopen(req, timeout=60) as resp:  # nosec: B310  # noqa: S310
+                return json.loads(resp.read().decode())
+        except urllib.error.HTTPError as e:
+            detail = self._read_error_detail(e)
+            logger.error("UPLOAD %s failed: HTTP %d — %s", url, e.code, detail)
+            raise ConnectionError(detail) from e
+        except urllib.error.URLError as e:
+            logger.error("UPLOAD %s failed: %s", url, e)
+            raise ConnectionError(f"Backend unavailable: {e}") from e
 
     def _download_file(self, path: str, output_path: str) -> str:
         """Download a file from the backend."""
@@ -148,6 +176,75 @@ class BackendClient:
     def user_id(self) -> str:
         """User identity returned by the last successful connect()."""
         return self._status.get("user_id", "default")
+
+    @property
+    def has_session(self) -> bool:
+        """True if this client currently holds a session token."""
+        return self._session_token is not None
+
+    # --- Session lock ---
+
+    def acquire_session(self) -> dict:
+        """Acquire exclusive access to the backend instance.
+
+        Stores the returned token and sends it automatically on all subsequent
+        requests.  Raises PermissionError (with the holder's user_id) if
+        another user currently holds the lock.  Re-acquiring while already the
+        holder refreshes the idle timer and returns the same token.
+        """
+        url = f"{self.base_url}/api/session/acquire"
+        self._validate_scheme(url)
+        body = b"{}"
+        try:
+            req = urllib.request.Request(
+                url, data=body,
+                headers=self._auth_headers({"Content-Type": "application/json"}),
+                method="POST",
+            )
+            with urllib.request.urlopen(req, timeout=10) as resp:  # nosec: B310  # noqa: S310
+                result = json.loads(resp.read().decode())
+        except urllib.error.HTTPError as e:
+            if e.code == 409:
+                try:
+                    body_data = json.loads(e.read().decode(errors="replace"))
+                    detail = body_data.get("detail", {})
+                    held_by = detail.get("held_by", "another user") if isinstance(detail, dict) else str(detail)
+                    acquired_at = detail.get("acquired_at", "") if isinstance(detail, dict) else ""
+                    msg = f"Instance is in use by '{held_by}'"
+                    if acquired_at:
+                        msg += f" (since {acquired_at})"
+                except Exception:
+                    msg = "Instance is in use by another user"
+                raise PermissionError(msg) from e
+            detail = self._read_error_detail(e)
+            raise ConnectionError(detail) from e
+        except urllib.error.URLError as e:
+            raise ConnectionError(f"Backend unavailable: {e}") from e
+        self._session_token = result.get("token")
+        return result
+
+    def release_session(self) -> dict:
+        """Release the session lock.
+
+        Safe to call even if this client does not hold a session.  Clears the
+        stored token regardless of whether the server call succeeds.
+        """
+        if not self._session_token:
+            return {"status": "no session held"}
+        try:
+            result = self._post("/api/session/release", {})
+        except ConnectionError:
+            result = {"status": "released (server unreachable)"}
+        self._session_token = None
+        return result
+
+    def heartbeat(self) -> dict:
+        """Refresh the session idle timer. Call every ~60 s while connected."""
+        return self._post("/api/session/heartbeat", {})
+
+    def session_status(self) -> dict:
+        """Return who (if anyone) currently holds the instance lock."""
+        return self._get("/api/session/status")
 
     # --- Projects ---
 
@@ -183,7 +280,7 @@ class BackendClient:
     # --- Regions ---
 
     def get_regions(self, crs: str = "EPSG:4326") -> list[dict]:
-        result = self._get(f"/api/labels/regions?crs={crs}")
+        result = self._get(f"/api/labels/regions?crs={urllib.parse.quote(crs)}")
         return result.get("regions", [])
 
     def add_region(self, geometry_geojson: dict, crs: str = "EPSG:4326") -> dict:
@@ -194,10 +291,12 @@ class BackendClient:
 
     # --- Annotations ---
 
-    def get_annotations(self, region_id: Optional[int] = None, crs: str = "EPSG:4326") -> list[dict]:
-        path = f"/api/labels/annotations?crs={crs}"
+    def get_annotations(self, region_id: Optional[int] = None, crs: str = "EPSG:4326", status: Optional[str] = None) -> list[dict]:
+        path = f"/api/labels/annotations?crs={urllib.parse.quote(crs)}"
         if region_id is not None:
             path += f"&region_id={region_id}"
+        if status is not None:
+            path += f"&status={urllib.parse.quote(status)}"
         result = self._get(path)
         return result.get("annotations", [])
 
@@ -247,11 +346,36 @@ class BackendClient:
 
     # --- Training ---
 
-    def start_training(self, raster_path: str, project_id: str = "default") -> dict:
-        return self._post("/api/training/start", {
-            "raster_path": raster_path,
-            "project_id": project_id,
-        })
+    def start_training(
+        self,
+        raster_path: str = "",
+        xyz_url: str = "",
+        xyz_zoom: int = 18,
+        project_id: str = "default",
+        epochs: Optional[int] = None,
+        batch_size: Optional[int] = None,
+        learning_rate: Optional[float] = None,
+        weight_decay: Optional[float] = None,
+        warmup_epochs: Optional[int] = None,
+        early_stopping_patience: Optional[int] = None,
+        freeze_backbone: Optional[bool] = None,
+        mixed_precision: Optional[bool] = None,
+    ) -> dict:
+        payload: dict[str, Any] = {"project_id": project_id}
+        if raster_path:
+            payload["raster_path"] = raster_path
+        if xyz_url:
+            payload["xyz_url"] = xyz_url
+            payload["xyz_zoom"] = xyz_zoom
+        for key, val in [
+            ("epochs", epochs), ("batch_size", batch_size),
+            ("learning_rate", learning_rate), ("weight_decay", weight_decay),
+            ("warmup_epochs", warmup_epochs), ("early_stopping_patience", early_stopping_patience),
+            ("freeze_backbone", freeze_backbone), ("mixed_precision", mixed_precision),
+        ]:
+            if val is not None:
+                payload[key] = val
+        return self._post("/api/training/start", payload)
 
     def stop_training(self) -> dict:
         return self._post("/api/training/stop")
@@ -310,6 +434,7 @@ class BackendClient:
         project_id: str = "default",
         checkpoint_run_id: Optional[str] = None,
         checkpoint_project_id: Optional[str] = None,
+        checkpoint_type: str = "best",
         xyz_url: Optional[str] = None,
         xyz_zoom: int = 18,
         raster_path: Optional[str] = None,
@@ -317,6 +442,7 @@ class BackendClient:
         data: dict[str, Any] = {
             "aoi_bounds": aoi_bounds,
             "project_id": project_id,
+            "checkpoint_type": checkpoint_type,
         }
         if xyz_url:
             data["xyz_url"] = xyz_url
@@ -382,8 +508,17 @@ class BackendClient:
             headers=self._auth_headers({"Content-Type": f"multipart/form-data; boundary={boundary}"}),
             method="POST",
         )
-        with urllib.request.urlopen(req, timeout=300) as resp:  # nosec: B310  # noqa: S310
-            return json.loads(resp.read().decode())
+        # 60s is enough for the file upload; inference itself runs async and is polled.
+        try:
+            with urllib.request.urlopen(req, timeout=60) as resp:  # nosec: B310  # noqa: S310
+                return json.loads(resp.read().decode())
+        except urllib.error.HTTPError as e:
+            detail = self._read_error_detail(e)
+            logger.error("UPLOAD %s failed: HTTP %d — %s", url, e.code, detail)
+            raise ConnectionError(detail) from e
+        except urllib.error.URLError as e:
+            logger.error("UPLOAD %s failed: %s", url, e)
+            raise ConnectionError(f"Backend unavailable: {e}") from e
 
     def get_inference_status(self) -> dict:
         return self._get("/api/inference/status")
