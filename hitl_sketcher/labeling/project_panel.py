@@ -19,6 +19,7 @@ from typing import Optional
 from .. import PLUGIN_NAME
 from ..classes.manager import ClassManager
 from .label_layer import LabelLayerManager
+from .utils import densify_ring
 from qgis.core import (
     QgsCoordinateReferenceSystem,
     QgsCoordinateTransform,
@@ -826,10 +827,16 @@ class ProjectPanel(QDockWidget):
             for r in regions:
                 if r["region_id"] == region_id:
                     geom = r["geometry"]
-                    coords = geom.get("coordinates", [[]])
-                    if coords and coords[0]:
-                        xs = [c[0] for c in coords[0]]
-                        ys = [c[1] for c in coords[0]]
+                    gtype = geom.get("type", "")
+                    coords = geom.get("coordinates", [])
+                    # Flatten to list of rings depending on geometry type
+                    if gtype == "MultiPolygon":
+                        rings = [ring for poly in coords for ring in poly]
+                    else:
+                        rings = coords
+                    if rings and rings[0]:
+                        xs = [c[0] for ring in rings for c in ring]
+                        ys = [c[1] for ring in rings for c in ring]
                         rect = QgsRectangle(min(xs), min(ys), max(xs), max(ys))
                         rect.scale(1.1)
                         self.iface.mapCanvas().setExtent(rect)
@@ -1177,19 +1184,35 @@ class ProjectPanel(QDockWidget):
         self._poll_timer.timeout.connect(self._poll_status)
         self._poll_timer.start(2000)
 
+    # Human-readable stage labels
+    _STAGE_LABELS = {
+        "loading_model": "Loading model…",
+        "fetching_tiles": "Fetching imagery…",
+        "inferring": "Running inference",
+        "exporting": "Exporting results…",
+    }
+
     def _poll_status(self) -> None:
         try:
             status = self.client.get_inference_status()
             state = status.get("status", "unknown")
+            stage = status.get("stage", "")
             processed = status.get("tiles_processed", 0)
             total = status.get("tiles_total", 0)
             pct = status.get("progress_pct", 0.0)
 
-            self._progress_bar.setValue(int(pct))
-            if total > 0:
+            if stage in ("loading_model", "fetching_tiles", "exporting"):
+                self._progress_bar.setRange(0, 0)
+            else:
+                self._progress_bar.setRange(0, 100)
+                self._progress_bar.setValue(int(pct))
+
+            if stage == "inferring" and total > 0:
                 self._run_status.setText(
-                    f"Processing tile {processed}/{total} ({pct:.0f}%)"
+                    f"Tile {processed}/{total} ({pct:.0f}%)"
                 )
+            elif stage in self._STAGE_LABELS:
+                self._run_status.setText(self._STAGE_LABELS[stage])
 
             if state == "complete":
                 self._poll_timer.stop()
@@ -1267,16 +1290,17 @@ class ProjectPanel(QDockWidget):
 
     @staticmethod
     def _reproject_geojson(geojson: dict, src_crs, dst_crs_id: str) -> dict:
-        """Reproject a GeoJSON Polygon geometry between CRS."""
+        """Reproject a GeoJSON Polygon geometry between CRS with edge densification."""
         dst_crs = QgsCoordinateReferenceSystem(dst_crs_id)
         xform = QgsCoordinateTransform(src_crs, dst_crs, QgsProject.instance())
         coords = geojson["coordinates"]
         new_coords = []
         for ring in coords:
+            dense_ring = densify_ring(ring, max_segment=500)
             new_ring = []
-            for pt in ring:
+            for pt in dense_ring:
                 transformed = xform.transform(QgsPointXY(pt[0], pt[1]))
-                new_ring.append([transformed.x(), transformed.y()])
+                new_ring.append([round(transformed.x(), 6), round(transformed.y(), 6)])
             new_coords.append(new_ring)
         return {"type": "Polygon", "coordinates": new_coords}
 

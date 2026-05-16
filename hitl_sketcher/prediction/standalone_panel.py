@@ -41,6 +41,7 @@ from qgis.PyQt.QtWidgets import (
 )
 
 from .. import PLUGIN_NAME
+from ..labeling.utils import densify_ring
 
 logger = logging.getLogger(__name__)
 
@@ -403,19 +404,36 @@ class StandaloneInferencePanel(QDockWidget):
         self._poll_timer.timeout.connect(self._poll_status)
         self._poll_timer.start(2000)
 
+    # Human-readable stage labels
+    _STAGE_LABELS = {
+        "loading_model": "Loading model…",
+        "fetching_tiles": "Fetching imagery…",
+        "inferring": "Running inference",
+        "exporting": "Exporting results…",
+    }
+
     def _poll_status(self) -> None:
         try:
             status = self.client.get_inference_status()
             state = status.get("status", "unknown")
+            stage = status.get("stage", "")
             processed = status.get("tiles_processed", 0)
             total = status.get("tiles_total", 0)
             pct = status.get("progress_pct", 0.0)
 
-            self._progress_bar.setValue(int(pct))
-            if total > 0:
+            if stage in ("loading_model", "fetching_tiles", "exporting"):
+                # Indeterminate (pulsing) progress for non-tiled phases
+                self._progress_bar.setRange(0, 0)
+            else:
+                self._progress_bar.setRange(0, 100)
+                self._progress_bar.setValue(int(pct))
+
+            if stage == "inferring" and total > 0:
                 self._run_status.setText(
                     f"Tile {processed}/{total} ({pct:.0f}%)"
                 )
+            elif stage in self._STAGE_LABELS:
+                self._run_status.setText(self._STAGE_LABELS[stage])
 
             if state == "complete":
                 self._poll_timer.stop()
@@ -505,20 +523,24 @@ class StandaloneInferencePanel(QDockWidget):
             return None
 
     def _get_aoi_in_4326(self) -> Optional[dict]:
-        """Return the pending AOI reprojected to EPSG:4326 for storage."""
+        """Return the pending AOI reprojected to EPSG:4326 for storage.
+
+        Densifies edges before reprojection so that a rectangle in
+        EPSG:3857 reprojects as a smooth curve rather than a trapezoid.
+        """
         aoi = getattr(self, "_pending_aoi", None)
         if aoi is None:
             return None
         canvas_crs = self.iface.mapCanvas().mapSettings().destinationCrs()
         if canvas_crs.authid() == "EPSG:4326":
             return aoi
-        # Reproject each coordinate
         dst_crs = QgsCoordinateReferenceSystem("EPSG:4326")
         xform = QgsCoordinateTransform(canvas_crs, dst_crs, QgsProject.instance())
         new_rings = []
         for ring in aoi.get("coordinates", []):
+            dense_ring = densify_ring(ring, max_segment=500)
             new_ring = []
-            for pt in ring:
+            for pt in dense_ring:
                 t = xform.transform(QgsPointXY(pt[0], pt[1]))
                 new_ring.append([round(t.x(), 6), round(t.y(), 6)])
             new_rings.append(new_ring)

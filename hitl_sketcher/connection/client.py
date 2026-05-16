@@ -238,14 +238,6 @@ class BackendClient:
         self._session_token = None
         return result
 
-    def heartbeat(self) -> dict:
-        """Refresh the session idle timer. Call every ~60 s while connected."""
-        return self._post("/api/session/heartbeat", {})
-
-    def session_status(self) -> dict:
-        """Return who (if anyone) currently holds the instance lock."""
-        return self._get("/api/session/status")
-
     # --- Projects ---
 
     def list_projects(self) -> list[dict]:
@@ -329,64 +321,6 @@ class BackendClient:
     def delete_region_annotations(self, region_id: int) -> dict:
         """Delete all annotations in a region (keep the region)."""
         return self._delete(f"/api/labels/annotations/region/{region_id}")
-
-    def upload_labels(self, gpkg_path: str) -> dict:
-        return self._upload_file("/api/labels/upload", gpkg_path)
-
-    def get_label_stats(self) -> dict:
-        return self._get("/api/labels/stats")
-
-    # --- Dataset ---
-
-    def build_dataset(self, raster_path: str, target_crs: str = "") -> dict:
-        return self._post("/api/dataset/build", {
-            "raster_path": raster_path,
-            "target_crs": target_crs,
-        })
-
-    # --- Training ---
-
-    def start_training(
-        self,
-        raster_path: str = "",
-        xyz_url: str = "",
-        xyz_zoom: int = 18,
-        project_id: str = "default",
-        epochs: Optional[int] = None,
-        batch_size: Optional[int] = None,
-        learning_rate: Optional[float] = None,
-        weight_decay: Optional[float] = None,
-        warmup_epochs: Optional[int] = None,
-        early_stopping_patience: Optional[int] = None,
-        freeze_backbone: Optional[bool] = None,
-        mixed_precision: Optional[bool] = None,
-    ) -> dict:
-        payload: dict[str, Any] = {"project_id": project_id}
-        if raster_path:
-            payload["raster_path"] = raster_path
-        if xyz_url:
-            payload["xyz_url"] = xyz_url
-            payload["xyz_zoom"] = xyz_zoom
-        for key, val in [
-            ("epochs", epochs), ("batch_size", batch_size),
-            ("learning_rate", learning_rate), ("weight_decay", weight_decay),
-            ("warmup_epochs", warmup_epochs), ("early_stopping_patience", early_stopping_patience),
-            ("freeze_backbone", freeze_backbone), ("mixed_precision", mixed_precision),
-        ]:
-            if val is not None:
-                payload[key] = val
-        return self._post("/api/training/start", payload)
-
-    def stop_training(self) -> dict:
-        return self._post("/api/training/stop")
-
-    def get_training_status(self) -> dict:
-        return self._get("/api/training/status")
-
-    def get_training_metrics(self, run_id: Optional[str] = None) -> list[dict]:
-        path = f"/api/training/metrics/{run_id}" if run_id else "/api/training/metrics"
-        result = self._get(path)
-        return result.get("metrics", [])
 
     # --- Raster Sources ---
 
@@ -528,17 +462,9 @@ class BackendClient:
 
     # --- Models ---
 
-    def list_models(self) -> list[dict]:
-        result = self._get("/api/models/list")
-        return result.get("checkpoints", [])
-
     def get_models_response(self) -> dict:
         """Return the full /api/models/list response including production_run_id."""
         return self._get("/api/models/list")
-
-    def get_best_model(self) -> Optional[dict]:
-        result = self._get("/api/models/best")
-        return result.get("checkpoint")
 
     def get_model_catalogue(self) -> list[dict]:
         """Return the global model catalogue: all project checkpoints + global models."""

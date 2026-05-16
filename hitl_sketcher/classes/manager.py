@@ -36,10 +36,6 @@ class ClassManager:
     def classes(self) -> list[SegClassDef]:
         return list(self._classes)
 
-    @property
-    def active_class(self) -> Optional[SegClassDef]:
-        return self._classes[0] if self._classes else None
-
     def add_class(self, name: str, color: Optional[str] = None) -> SegClassDef:
         """Add a new class. Returns the created class."""
         if color is None:
@@ -56,17 +52,6 @@ class ClassManager:
         before = len(self._classes)
         self._classes = [c for c in self._classes if c.class_id != class_id]
         return len(self._classes) < before
-
-    def update_class(self, class_id: int, name: Optional[str] = None, color: Optional[str] = None) -> bool:
-        """Update a class's name or color."""
-        for c in self._classes:
-            if c.class_id == class_id:
-                if name is not None:
-                    c.name = name
-                if color is not None:
-                    c.color = color
-                return True
-        return False
 
     def get_class(self, class_id: int) -> Optional[SegClassDef]:
         for c in self._classes:
